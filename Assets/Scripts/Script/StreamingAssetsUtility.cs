@@ -59,6 +59,22 @@ public class StreamingAssetsUtility
 
     public static async Task<Sprite> GetSpriteImage(string fileName, bool isLauncher = false)
     {
+#if UNITY_WEBGL && !UNITY_EDITOR
+        // WebGL: StreamingAssets eh servido por HTTP -> carrega via UnityWebRequest
+        // (File.Exists/ReadFile nao funcionam com URL no navegador).
+        string url = Application.streamingAssetsPath + "/Textures/" + fileName + ".png";
+        using (UnityWebRequest req = UnityWebRequestTexture.GetTexture(url))
+        {
+            UnityWebRequestAsyncOperation op = req.SendWebRequest();
+            while (!op.isDone) await Task.Yield();
+            if (req.result == UnityWebRequest.Result.Success)
+            {
+                Texture2D wtex = DownloadHandlerTexture.GetContent(req);
+                return Sprite.Create(wtex, new Rect(0, 0, wtex.width, wtex.height), Vector2.zero);
+            }
+            return null;
+        }
+#else
         string path = Path.Combine(GetStreamingAssetPath("Textures", isLauncher), $"{fileName}.jpg").Replace("\\", "/");
 
         if (!File.Exists(path))
@@ -75,6 +91,7 @@ public class StreamingAssetsUtility
         }
 
         return null;
+#endif
     }
 
     public static async Task<Sprite> GetTokenImageData(string path)
