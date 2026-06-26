@@ -52,19 +52,19 @@ var WebGLWindow = {
     },
     WebGLWindowOnFocus: function (cb) {
         this.focusListener = function () { 
-            (!!Runtime.dynCall) ? Runtime.dynCall("v", cb, []) : {{{ makeDynCall("v", "cb") }}}(); 
+            {{{ makeDynCall("v", "cb") }}}(); 
         };
         window.addEventListener('focus', this.focusListener);
     },
     WebGLWindowOnBlur: function (cb) {
         this.blurListener = function () { 
-            (!!Runtime.dynCall) ? Runtime.dynCall("v", cb, []) : {{{ makeDynCall("v", "cb") }}}(); 
+            {{{ makeDynCall("v", "cb") }}}(); 
         };
         window.addEventListener('blur', this.blurListener);
     },
     WebGLWindowOnResize: function(cb) {
         this.resizeListener = function () { 
-            (!!Runtime.dynCall) ? Runtime.dynCall("v", cb, []) : {{{ makeDynCall("v", "cb") }}}(); 
+            {{{ makeDynCall("v", "cb") }}}(); 
         };
         window.addEventListener('resize', this.resizeListener);
     },
