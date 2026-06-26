@@ -1,0 +1,101 @@
+# Build WebGL do DCGO na nuvem (GameCI) + deploy.
+#
+# Onde colocar: copie este arquivo para o SEU FORK do DCGO em
+#   .github/workflows/build-webgl.yml
+# (ele roda no repositório do jogo, onde o projeto Unity vive).
+#
+# Pré-requisitos (ver docs/SETUP.md):
+#   Secrets no repositório: UNITY_LICENSE, UNITY_EMAIL, UNITY_PASSWORD
+#
+# Resultado: artefato "WebGL-Build" baixável + (opcional) deploy no GitHub Pages.
+
+name: Build WebGL
+
+on:
+  push:
+    branches: [main, master, develop]
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: webgl-build-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Compilar WebGL
+    runs-on: ubuntu-latest
+    steps:
+      # NÃO usamos lfs:true aqui de propósito — o checkout puxaria ~682 MB de LFS
+      # a cada build e estouraria a cota free do GitHub (1 GB/mês). Em vez disso,
+      # cacheamos os objetos LFS e só baixamos o que faltar.
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Lista de objetos LFS (chave do cache)
+        run: git lfs ls-files -l | cut -d' ' -f1 | sort > .lfs-assets-id
+
+      - name: Cache dos objetos LFS
+        uses: actions/cache@v4
+        with:
+          path: .git/lfs
+          key: lfs-${{ hashFiles('.lfs-assets-id') }}
+          restore-keys: lfs-
+
+      - name: Git LFS pull (só o que não veio do cache)
+        run: git lfs pull
+
+      # Cache da pasta Library acelera muito builds seguintes.
+      - name: Cache Library
+        uses: actions/cache@v4
+        with:
+          path: Library
+          key: Library-WebGL-${{ hashFiles('Assets/**', 'Packages/**', 'ProjectSettings/**') }}
+          restore-keys: |
+            Library-WebGL-
+            Library-
+
+      - name: Build (GameCI)
+        uses: game-ci/unity-builder@v4
+        env:
+          UNITY_LICENSE: ${{ secrets.UNITY_LICENSE }}
+          UNITY_EMAIL: ${{ secrets.UNITY_EMAIL }}
+          UNITY_PASSWORD: ${{ secrets.UNITY_PASSWORD }}
+        with:
+          unityVersion: 2021.3.45f2
+          targetPlatform: WebGL
+          # Se o projeto tiver um método de build próprio, aponte aqui com
+          # buildMethod: NomeDaClasse.NomeDoMetodo
+
+      - name: Upload do artefato
+        uses: actions/upload-artifact@v4
+        with:
+          name: WebGL-Build
+          path: build/WebGL
+          retention-days: 14
+
+      # ---- Deploy opcional no GitHub Pages (descomente para ativar) ----
+      # - name: Configurar Pages
+      #   uses: actions/configure-pages@v5
+      # - name: Empacotar para Pages
+      #   uses: actions/upload-pages-artifact@v3
+      #   with:
+      #     path: build/WebGL/WebGL
+      # deploy é feito no job abaixo
+
+  # deploy:
+  #   needs: build
+  #   runs-on: ubuntu-latest
+  #   environment:
+  #     name: github-pages
+  #     url: ${{ steps.deployment.outputs.page_url }}
+  #   steps:
+  #     - name: Deploy no GitHub Pages
+  #       id: deployment
+  #       uses: actions/deploy-pages@v4
