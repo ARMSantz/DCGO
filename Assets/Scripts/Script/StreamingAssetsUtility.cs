@@ -19,7 +19,7 @@ public class StreamingAssetsUtility
         }
     }
 
-    #region ‰æ‘œ‚ÌŽæ“¾
+    #region ç”»åƒã®å–å¾—
     public static Texture2D BinaryToTexture(byte[] bytes)
     {
         Texture2D texture = new Texture2D(1, 1);
@@ -184,7 +184,7 @@ public class StreamingAssetsUtility
         return File.Exists(path);
     }
 
-    #region ƒeƒLƒXƒgƒtƒ@ƒCƒ‹‚ÌŽæ“¾
+    #region ãƒ†ã‚­ã‚¹ãƒˆãƒ•ã‚¡ã‚¤ãƒ«ã®å–å¾—
     public static string GetText(string fileName)
     {
         string path = Path.Combine(GetStreamingAssetPath("", false), $"{fileName}.txt").Replace("\\", "/");
@@ -200,6 +200,16 @@ public class StreamingAssetsUtility
 
     public static string GetStreamingAssetPath(string subPath, bool isLauncher)
     {
+#if UNITY_WEBGL && !UNITY_EDITOR
+        // No WebGL o StreamingAssets eh somente-leitura (servido por HTTP).
+        // Decks precisam de um local gravavel -> persistentDataPath (IndexedDB).
+        if (subPath == "Decks")
+        {
+            string decks = Path.Combine(Application.persistentDataPath, "Decks").Replace("\\", "/");
+            if (!Directory.Exists(decks)) Directory.CreateDirectory(decks);
+            return decks;
+        }
+#endif
         if (isLauncher)
         {
             string path = Application.streamingAssetsPath;
