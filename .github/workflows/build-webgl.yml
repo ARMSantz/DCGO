@@ -51,6 +51,11 @@ jobs:
       - name: Git LFS pull (só o que não veio do cache)
         run: git lfs pull
 
+      # O arquivo da chave de cache deixaria a árvore git "suja" e o GameCI
+      # recusaria o build ("Branch is dirty"). Já usamos ele no cache; pode sair.
+      - name: Limpar arquivo auxiliar do cache
+        run: rm -f .lfs-assets-id
+
       # Cache da pasta Library acelera muito builds seguintes.
       - name: Cache Library
         uses: actions/cache@v4
@@ -70,6 +75,9 @@ jobs:
         with:
           unityVersion: 2021.3.45f2
           targetPlatform: WebGL
+          # Sem isto o GameCI tenta versionar via git e exige árvore limpa.
+          # Não precisamos de versão semântica automática neste build.
+          versioning: None
           # Se o projeto tiver um método de build próprio, aponte aqui com
           # buildMethod: NomeDaClasse.NomeDoMetodo
 
