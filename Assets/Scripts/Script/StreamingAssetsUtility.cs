@@ -201,13 +201,19 @@ public class StreamingAssetsUtility
     public static string GetStreamingAssetPath(string subPath, bool isLauncher)
     {
 #if UNITY_WEBGL && !UNITY_EDITOR
-        // No WebGL o StreamingAssets eh somente-leitura (servido por HTTP).
-        // Decks precisam de um local gravavel -> persistentDataPath (IndexedDB).
-        if (subPath == "Decks")
+        // No WebGL o StreamingAssets eh somente-leitura (HTTP) e subir diretorios
+        // numa URL gera caminhos quebrados ("/https:/Assets/..."). Redireciona os
+        // dados gravaveis (decks e cache de texturas) para persistentDataPath.
+        if (subPath == "Decks" || subPath == "Textures")
         {
-            string decks = Path.Combine(Application.persistentDataPath, "Decks").Replace("\\", "/");
-            if (!Directory.Exists(decks)) Directory.CreateDirectory(decks);
-            return decks;
+            string p = Path.Combine(Application.persistentDataPath, subPath).Replace("\\", "/");
+            if (!Directory.Exists(p)) Directory.CreateDirectory(p);
+            if (subPath == "Textures")
+            {
+                string cardDir = Path.Combine(p, "Card");
+                if (!Directory.Exists(cardDir)) Directory.CreateDirectory(cardDir);
+            }
+            return p;
         }
 #endif
         if (isLauncher)
