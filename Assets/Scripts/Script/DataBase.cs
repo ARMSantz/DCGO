@@ -4,7 +4,6 @@ using UnityEngine;
 using System;
 using System.Linq;
 using System.IO;
-using WebSocketSharp;
 
 public class DataBase : MonoBehaviour
 {
@@ -926,7 +925,7 @@ public class DictionaryUtility
 
         foreach(string Type in Types)
         {
-            CardKind cardKind = Type.IsNullOrEmpty() ? CardKind.Tamer : CardKindNameDictionary.First(x => x.Value == Type).Key;
+            CardKind cardKind = string.IsNullOrEmpty(Type) ? CardKind.Tamer : CardKindNameDictionary.First(x => x.Value == Type).Key;
 
             Typing.Add(cardKind);
         }
