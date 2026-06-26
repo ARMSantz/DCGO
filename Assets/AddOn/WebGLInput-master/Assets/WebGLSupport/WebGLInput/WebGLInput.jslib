@@ -116,7 +116,7 @@ var WebGLInput = {
                     input.setSelectionRange(start + 1, start + 1);
                     input.oninput();	// call oninput to exe ValueChange function!!
                 } else {
-                    (!!Runtime.dynCall) ? Runtime.dynCall("vii", cb, [id, e.shiftKey ? -1 : 1]) : {{{ makeDynCall("vii", "cb") }}}(id, e.shiftKey ? -1 : 1);
+                    {{{ makeDynCall("vii", "cb") }}}(id, e.shiftKey ? -1 : 1);
                 }
             }
         });
@@ -128,13 +128,13 @@ var WebGLInput = {
     WebGLInputOnFocus: function (id, cb) {
         var input = instances[id];
         input.onfocus = function () {
-            (!!Runtime.dynCall) ? Runtime.dynCall("vi", cb, [id]) : {{{ makeDynCall("vi", "cb") }}}(id);
+            {{{ makeDynCall("vi", "cb") }}}(id);
         };
     },
     WebGLInputOnBlur: function (id, cb) {
         var input = instances[id];
         input.onblur = function () {
-            (!!Runtime.dynCall) ? Runtime.dynCall("vi", cb, [id]) : {{{ makeDynCall("vi", "cb") }}}(id);
+            {{{ makeDynCall("vi", "cb") }}}(id);
         };
     },
     WebGLInputIsFocus: function (id) {
@@ -147,7 +147,7 @@ var WebGLInput = {
             var bufferSize = lengthBytesUTF8(returnStr) + 1;
             var buffer = _malloc(bufferSize);
             stringToUTF8(returnStr, buffer, bufferSize);
-            (!!Runtime.dynCall) ? Runtime.dynCall("vii", cb, [id, buffer]) : {{{ makeDynCall("vii", "cb") }}}(id, buffer);
+            {{{ makeDynCall("vii", "cb") }}}(id, buffer);
         };
     },
     WebGLInputOnEditEnd:function(id, cb){
@@ -157,7 +157,7 @@ var WebGLInput = {
             var bufferSize = lengthBytesUTF8(returnStr) + 1;
             var buffer = _malloc(bufferSize);
             stringToUTF8(returnStr, buffer, bufferSize);
-            (!!Runtime.dynCall) ? Runtime.dynCall("vii", cb, [id, buffer]) : {{{ makeDynCall("vii", "cb") }}}(id, buffer);
+            {{{ makeDynCall("vii", "cb") }}}(id, buffer);
         };
     },
     WebGLInputOnKeyboardEvent:function(id, cb){
@@ -171,7 +171,7 @@ var WebGLInput = {
                 var shift = e.shiftKey ? 1 : 0;
                 var ctrl = e.ctrlKey ? 1 : 0;
                 var alt = e.altKey ? 1 : 0;
-                (!!Runtime.dynCall) ? Runtime.dynCall("viiiiiii", cb, [id, mode, key, code, shift, ctrl, alt]) : {{{ makeDynCall("viiiiiii", "cb") }}}(id, mode, key, code, shift, ctrl, alt);
+                {{{ makeDynCall("viiiiiii", "cb") }}}(id, mode, key, code, shift, ctrl, alt);
             }
         }
         input.addEventListener('keydown', function(e) { func(1, e); });
