@@ -13,7 +13,7 @@ using UnityEngine.SceneManagement;
 using Hashtable = ExitGames.Client.Photon.Hashtable;
 
 [RequireComponent(typeof(StarterDeck))]
-public class ContinuousController : MonoBehaviour
+public partial class ContinuousController : MonoBehaviour
 {
     private static WaitForSeconds _waitForSeconds0_1 = new WaitForSeconds(0.1f);
     [Header("game language")]
@@ -546,11 +546,18 @@ public class ContinuousController : MonoBehaviour
 
         // deck data
         //DeckDatas = PlayerPrefsUtil.LoadList<DeckData>(DeckDatasPlayerPrefsKey);
+#if UNITY_WEBGL && !UNITY_EDITOR
+        StartCoroutine(LoadDecksFromCloud());
+#else
         LoadDeckLists();
+#endif
         GetComponent<StarterDeck>().SetStarterDecks();
 
         // player data
         LoadPlayerName();
+#if UNITY_WEBGL && !UNITY_EDITOR
+        PlayerName = DcgoWebBridge.Username;
+#endif
         LoadWinCount();
 
         // game play
@@ -624,6 +631,10 @@ public class ContinuousController : MonoBehaviour
 
     public void SaveDeckData(DeckData data)
     {
+#if UNITY_WEBGL && !UNITY_EDITOR
+        StartCoroutine(SaveDeckToCloud(data));
+        return;
+#endif
         string savePath = StreamingAssetsUtility.GetStreamingAssetPath("Decks", false);
 
         File.WriteAllText($"{savePath}/{data.DeckName}_{data.DeckID}.txt", DeckCodeUtility.GetDeckBuilderFile(data));
@@ -631,6 +642,11 @@ public class ContinuousController : MonoBehaviour
 
     public void RenameDeck(DeckData data, string newName)
     {
+#if UNITY_WEBGL && !UNITY_EDITOR
+        data.DeckName = newName;
+        StartCoroutine(SaveDeckToCloud(data));
+        return;
+#endif
         string savePath = StreamingAssetsUtility.GetStreamingAssetPath("Decks", false);
         if (File.Exists($"{savePath}/{data.DeckName}_{data.DeckID}.txt"))
         {
@@ -644,6 +660,10 @@ public class ContinuousController : MonoBehaviour
 
     public void DeleteDeck(DeckData data)
     {
+#if UNITY_WEBGL && !UNITY_EDITOR
+        StartCoroutine(DeleteDeckFromCloud(data));
+        return;
+#endif
         string filePath = StreamingAssetsUtility.GetStreamingAssetPath("Decks", false);
 
         if (!Directory.Exists(filePath))
