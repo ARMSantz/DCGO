@@ -41,6 +41,10 @@ public class StreamingAssetsUtility
             {
                 path = Path.Combine(GetStreamingAssetPath("Textures", isLauncher), $"Card/{fileName}.webp").Replace("\\", "/");
 
+#if UNITY_WEBGL && !UNITY_EDITOR
+                // WebGL: nao cacheia carta em disco (IDBFS pode corromper o webp) -> sempre baixa.
+                return await GetCardImageData(fileName, path);
+#else
                 if (!File.Exists(path))
                 {
                     return await GetCardImageData(fileName, path);
@@ -49,6 +53,7 @@ public class StreamingAssetsUtility
                 {
                     return await GetCardImageDataLocal(path);
                 }
+#endif
             }
         }
         else
@@ -174,8 +179,10 @@ public class StreamingAssetsUtility
         else
         {
             Debug.Log($"WebRequest Successful: Checking local file - {File.Exists(filePath)}");
+#if !(UNITY_WEBGL && !UNITY_EDITOR)
             if (!File.Exists(filePath))
                 File.WriteAllBytes(filePath, webReq_CardImage.downloadHandler.data);
+#endif
 
             Texture2D texture = Texture2DExt.CreateTexture2DFromWebP(webReq_CardImage.downloadHandler.data, lMipmaps: true, lLinear: false, lError: out WebP.Error lError);
 
