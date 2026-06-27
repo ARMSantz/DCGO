@@ -9,7 +9,7 @@ namespace DcgoWebBuild
     // e ~163 sprites de UI que so existem empacotados no build desktop). Sem eles,
     // o WebGL mostra MAGENTA (material faltando -> shader de erro) e BRANCO (Image
     // sem sprite). Este hook, rodando a cada cena, neutraliza esses casos para os
-    // menus ficarem limpos e usaveis (sem a arte cyber original).
+    // menus ficarem usaveis: botoes visiveis/clicaveis e paineis legiveis.
     public static class DcgoWebMissingAssetFix
     {
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
@@ -35,20 +35,30 @@ namespace DcgoWebBuild
                     r.enabled = false;
             }
 
-            // 2) UI (Image/Text) com material de erro -> volta ao material padrao da UI.
+            // 2) UI com material de erro -> volta ao material padrao da UI.
             foreach (var g in Object.FindObjectsOfType<Graphic>(true))
             {
                 if (BrokenShader(g.material))
                     g.material = null; // null => defaultGraphicMaterial
             }
 
-            // 3) Image sem sprite renderiza branco -> fundo neutro escuro translucido,
-            //    apenas quando a cor esta no branco padrao (evita mexer em paineis ja
-            //    coloridos de proposito).
+            // 3) Image sem sprite renderiza branco. Em vez de esconder (botoes sumiam),
+            //    deixa VISIVEL: botoes ganham cor distinta clicavel; paineis ficam
+            //    cinza-claro (texto escuro continua legivel). So mexe quando a cor
+            //    esta no branco padrao (nao toca em elementos ja coloridos).
             foreach (var img in Object.FindObjectsOfType<Image>(true))
             {
-                if (img.sprite == null && img.color == Color.white)
-                    img.color = new Color(0.10f, 0.11f, 0.14f, 0.88f);
+                if (img.sprite != null) continue;
+                if (img.color != Color.white) continue;
+
+                bool interactive = img.GetComponent<Selectable>() != null
+                                   || (img.transform.parent != null
+                                       && img.transform.parent.GetComponent<Selectable>() != null);
+
+                if (interactive)
+                    img.color = new Color(0.22f, 0.34f, 0.52f, 1f);   // botao: azul visivel opaco
+                else
+                    img.color = new Color(0.80f, 0.82f, 0.86f, 0.92f); // painel: cinza claro (texto escuro legivel)
             }
         }
     }
