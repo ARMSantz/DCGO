@@ -35,12 +35,17 @@ public class CreateNewDeckButton : MonoBehaviour
     {
         CreateNewDeckWayObject.Off();
 
-        string deckCode = "";
+#if UNITY_WEBGL && !UNITY_EDITOR
+        // Clipboard do navegador eh assincrono (e systemCopyBuffer nao o acessa).
+        DcgoClipboard.Read(ImportFromDeckCode);
+        return;
+#else
+        ImportFromDeckCode(GUIUtility.systemCopyBuffer);
+#endif
+    }
 
-        //deckCode = ContinuousController.instance.ShuffleDeckCode.GetDeckCode(GUIUtility.systemCopyBuffer);
-
-        deckCode = GUIUtility.systemCopyBuffer;
-
+    void ImportFromDeckCode(string deckCode)
+    {
         Debug.Log($"DeckCode\n{deckCode}");
 
         List<CEntity_Base> AllDeckCards = DeckCodeUtility.GetAllDeckCardsFromDeckBuilderDeckCode(deckCode);
