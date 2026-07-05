@@ -61,6 +61,9 @@ public partial class ContinuousController : MonoBehaviour
     }
     public DeckData LastBattleDeckData { get; private set; } = null;
 
+    // Deck escolhido pelo jogador para o BOT usar (senao, aleatorio).
+    public DeckData BotDeckData = null;
+
     public bool NeedUpdate { get; set; }
 
     public bool isRandomMatch { get; set; }

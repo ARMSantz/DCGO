@@ -92,6 +92,17 @@ public class SelectBattleDeck : MonoBehaviour
         ContinuousController.instance.BattleDeckData = deckInfoPanel.ShowingDeckData;
     }
 
+    // Reconfigura o painel para escolher o deck do OPONENTE (bot), sem fechar.
+    public void SetUpBotDeckSelection(UnityEngine.Events.UnityAction onSelectBot)
+    {
+        TitleText.text = LocalizeUtility.GetLocalizedString(
+            EngMessage: "Select the OPPONENT (Bot) deck",
+            JpnMessage: "相手（Bot）のデッキを選択");
+        deckInfoPanel.OnClickSelectDeckAction = onSelectBot;
+        _once = false;
+        SetSelectDeckButton();
+    }
+
     public IEnumerator OnClickSelectButton_RoomMatchCoroutine()
     {
         if (_once || deckInfoPanel.ShowingDeckData == null)

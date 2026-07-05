@@ -146,7 +146,11 @@ public class SelectBattleMode : MonoBehaviour
             Opening.instance.battle.selectBattleDeck.SetUpSelectBattleDeck(() =>
             {
                 Opening.instance.battle.selectBattleDeck.OnClickSelectButton_BotMatch();
-                ContinuousController.instance.StartCoroutine(StartBattleCoroutine());
+                Opening.instance.battle.selectBattleDeck.SetUpBotDeckSelection(() =>
+                {
+                    ContinuousController.instance.BotDeckData = Opening.instance.battle.selectBattleDeck.deckInfoPanel.ShowingDeckData;
+                    ContinuousController.instance.StartCoroutine(StartBattleCoroutine());
+                });
             }
 
             , 0);

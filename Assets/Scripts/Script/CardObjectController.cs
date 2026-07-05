@@ -34,7 +34,9 @@ public class CardObjectController : MonoBehaviour
                     }
                 }
 
-                DeckData randomDeck = deckDatas[UnityEngine.Random.Range(0, deckDatas.Count)];
+                DeckData randomDeck = (ContinuousController.instance.BotDeckData != null && ContinuousController.instance.BotDeckData.IsValidDeckData())
+                    ? ContinuousController.instance.BotDeckData
+                    : deckDatas[UnityEngine.Random.Range(0, deckDatas.Count)];
 
                 RandomDeck = new DeckData(randomDeck.GetThisDeckCode(), randomDeck.DeckID);
 
