@@ -42,10 +42,11 @@ namespace DcgoWebBuild
                     g.material = null; // null => defaultGraphicMaterial
             }
 
-            // 3) Image sem sprite renderiza branco. Em vez de esconder (botoes sumiam),
-            //    deixa VISIVEL: botoes ganham cor distinta clicavel; paineis ficam
-            //    cinza-claro (texto escuro continua legivel). So mexe quando a cor
-            //    esta no branco padrao (nao toca em elementos ja coloridos).
+            // 3) Image sem sprite renderiza branco. Apos recuperar a arte real, os
+            //    que sobram sem sprite sao casos onde o proprio desktop nao tem sprite
+            //    (areas do campo, placeholders de carta) — la eles sao transparentes.
+            //    Entao: botoes ganham cor clicavel; o resto vira TRANSPARENTE (nao mais
+            //    caixa escura). So mexe quando a cor esta no branco padrao.
             foreach (var img in Object.FindObjectsOfType<Image>(true))
             {
                 if (img.sprite != null) continue;
@@ -58,7 +59,7 @@ namespace DcgoWebBuild
                 if (interactive)
                     img.color = new Color(0.22f, 0.34f, 0.52f, 1f);   // botao: azul visivel opaco
                 else
-                    img.color = new Color(0.80f, 0.82f, 0.86f, 0.92f); // painel: cinza claro (texto escuro legivel)
+                    img.color = new Color(1f, 1f, 1f, 0f);            // transparente (como no desktop)
             }
         }
     }
