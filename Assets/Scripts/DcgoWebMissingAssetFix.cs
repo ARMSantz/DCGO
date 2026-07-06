@@ -10,22 +10,23 @@ namespace DcgoWebBuild
     // RE-SKIN PROCEDURAL DOS MENUS.
     //
     // O repositorio publico do DCGO nao traz toda a "skin" dos menus (faltam ~15
-    // materiais e ~163 sprites de UI que so existem empacotados no build desktop).
-    // Sem eles o WebGL mostra MAGENTA (material de erro) e CAIXAS BRANCAS (Image cujo
-    // sprite/textura resolve pra null). Alem disso a UI de menu e' INSTANCIADA de
-    // PREFABS em runtime, entao um fix unico no carregamento da cena nao alcanca os
-    // botoes/paineis criados depois. Por isso esta camada:
+    // materiais e ~163 sprites de UI empacotados so no build desktop). Sem eles o
+    // WebGL mostra MAGENTA (material de erro) e CAIXAS BRANCAS (Image cujo sprite
+    // resolve pra null, mascaras sem sprite e decoracoes com SCRIPT faltando). A UI
+    // de menu vive toda na cena "Opening" e nasce de prefabs em runtime, entao um
+    // fix unico no load nao alcanca. Por isso esta camada roda em LOOP e:
     //
-    //   * roda em LOOP (nao so no sceneLoaded), pegando UI instanciada tarde;
-    //   * da aos botoes um sprite procedural limpo (cantos arredondados) + cores de
-    //     hover/press, sem tocar em onClick nem na logica;
-    //   * neutraliza a poluicao branca: fundo de dialogo vira painel escuro
-    //     translucido; o resto fica transparente (e para de bloquear cliques);
-    //   * NAO mexe na partida (BattleScene) nem no editor de deck (deckbuilder) —
-    //     so nos menus / selecao de modo / selecao de deck / config / lobby.
+    //   * BOTOES: acha o fundo do botao em qualquer profundidade (a hierarquia real
+    //     e' Button > Mask > BackGroundImage) e da um sprite arredondado limpo com
+    //     cores de hover/press — sem tocar em onClick/logica;
+    //   * MASCARAS sem sprite: desliga so o desenho (showMaskGraphic=false) pra sumir
+    //     o branco SEM quebrar o recorte;
+    //   * DECORACOES quebradas (GameObject com script faltando) e caixas brancas
+    //     soltas: viram transparentes e param de bloquear cliques;
+    //   * fundo de dialogo grande vira painel azul-escuro translucido.
     //
-    // Tudo e' puramente visual: so altera Image.sprite / cor / material. A
-    // funcionalidade (navegacao, Photon, decks) fica intacta.
+    // Escopo: NAO mexe na partida (BattleScene) nem no editor de deck (deckbuilder).
+    // Tudo e' visual (Image.sprite/cor/material); a funcionalidade fica intacta.
     public class DcgoWebMenuSkin : MonoBehaviour
     {
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
@@ -37,16 +38,17 @@ namespace DcgoWebBuild
             go.AddComponent<DcgoWebMenuSkin>();
         }
 
-        // Componentes que marcam o EDITOR de deck (deckbuilder) — excluidos do skin.
-        // A LISTA/SELECAO de deck (DeckListPanel/SelectBattleDeck/SelectDeck) NAO
-        // entra aqui de proposito: o usuario pediu para skinnar a selecao de deck.
+        // Marcadores do EDITOR de deck (deckbuilder) — excluidos do skin. A
+        // LISTA/SELECAO de deck NAO entra aqui de proposito (usuario pediu skin nela).
         static readonly string[] DeckEditorMarkers =
         {
             "EditDeck", "DetailCard_DeckEditor", "CardPrefab_CreateDeck"
         };
 
         Sprite _btn, _panel;
-        readonly HashSet<int> _done = new HashSet<int>();
+        readonly HashSet<int> _seenSel = new HashSet<int>();   // Selectables ja tratados
+        readonly HashSet<int> _btnImg  = new HashSet<int>();   // Images que sao fundo de botao
+        readonly HashSet<int> _doneImg = new HashSet<int>();   // Images de poluicao ja tratadas
         bool _logged;
 
         void Start()
@@ -57,11 +59,14 @@ namespace DcgoWebBuild
             StartCoroutine(Loop());
         }
 
-        void OnScene(Scene s, LoadSceneMode m) { _done.Clear(); _logged = false; }
+        void OnScene(Scene s, LoadSceneMode m)
+        {
+            _seenSel.Clear(); _btnImg.Clear(); _doneImg.Clear(); _logged = false;
+        }
 
         IEnumerator Loop()
         {
-            var wait = new WaitForSecondsRealtime(0.35f);
+            var wait = new WaitForSecondsRealtime(0.4f);
             while (true) { try { Skin(); } catch { } yield return wait; }
         }
 
@@ -81,45 +86,56 @@ namespace DcgoWebBuild
                 if (g && BrokenShader(g.material))
                     g.material = null;
 
-            // (c) Imagens.
-            var images = Object.FindObjectsOfType<Image>(true);
-            int broken = 0, skinned = 0, hidden = 0;
-            List<string> sample = _logged ? null : new List<string>();
-
-            foreach (var img in images)
+            if (battle)
             {
-                if (!img) continue;
+                foreach (var img in Object.FindObjectsOfType<Image>(true))
+                    if (img) Conservative(img);
+                return;
+            }
 
-                if (battle) { Conservative(img); continue; }
-                if (InDeckEditor(img.transform)) continue;
+            int skinned = 0, hidden = 0, masks = 0;
+            List<string> survivors = _logged ? null : new List<string>();
 
-                var sel = SelectableOf(img);
-                bool isBtnGraphic = sel != null && sel.targetGraphic == img;
-                bool brokenArt = IsBrokenArt(img);
+            // (c) BOTOES: um passe por Selectable (pega fundo em qualquer profundidade).
+            foreach (var sel in Object.FindObjectsOfType<Selectable>(true))
+            {
+                if (!sel || InDeckEditor(sel.transform)) continue;
+                if (!_seenSel.Add(sel.GetInstanceID())) continue;
+                var bg = PickButtonBackground(sel);
+                if (bg == null) continue;
+                _btnImg.Add(bg.GetInstanceID());
+                SkinButton(sel, bg);
+                skinned++;
+            }
 
-                if (isBtnGraphic)
+            // (d) RESTO das imagens: mascaras, decoracoes quebradas, caixas brancas.
+            foreach (var img in Object.FindObjectsOfType<Image>(true))
+            {
+                if (!img || InDeckEditor(img.transform)) continue;
+                int id = img.GetInstanceID();
+                if (_btnImg.Contains(id)) continue;   // e' fundo de botao, ja tratado
+
+                var mask = img.GetComponent<Mask>();
+                if (mask != null)
                 {
-                    if (brokenArt && _done.Add(img.GetInstanceID())) { SkinButton(sel, img); skinned++; }
-                    continue;
+                    if (mask.showMaskGraphic && IsBrokenArt(img)) { mask.showMaskGraphic = false; masks++; }
+                    continue;   // nunca mexe no alfa da mascara (quebraria o recorte)
                 }
 
-                if (brokenArt)
+                if (!_doneImg.Add(id)) continue;
+
+                if (HasMissingScript(img.gameObject) || IsBrokenArt(img))
                 {
-                    if (_done.Add(img.GetInstanceID()))
-                    {
-                        if (IsDialogBackground(img)) SkinPanel(img);
-                        else Hide(img);
-                        hidden++;
-                    }
-                    broken++;
-                    if (sample != null && sample.Count < 30)
-                        sample.Add(Path(img.transform) + "  sprite=" + (img.sprite ? img.sprite.name : "NULL"));
+                    if (IsDialogBackground(img)) SkinPanel(img);
+                    else Hide(img);
+                    hidden++;
                 }
-                else if (sample != null && sample.Count < 30 && img.color == Color.white && img.sprite != null)
+                else if (survivors != null && survivors.Count < 25
+                         && img.color.a > 0.6f && Big(img))
                 {
-                    // branco opaco mas COM sprite: registrar pra eu entender a fonte
-                    // da caixa branca (ex.: textura branca embutida) e refinar depois.
-                    sample.Add("[has-sprite] " + Path(img.transform) + " = " + img.sprite.name);
+                    // grande, opaco, COM sprite e sem script faltando: sobreviveu.
+                    // Registro pra eu ver se ainda e' poluicao a tratar.
+                    survivors.Add(Path(img.transform) + "  sprite=" + (img.sprite ? img.sprite.name : "NULL"));
                 }
             }
 
@@ -127,33 +143,40 @@ namespace DcgoWebBuild
             {
                 _logged = true;
                 Debug.Log("[DCGOSKIN] scene=" + SceneManager.GetActiveScene().name +
-                          " images=" + images.Length + " brokenArt=" + broken +
-                          " skinnedBtn=" + skinned + " hidden=" + hidden);
-                if (sample != null) foreach (var s in sample) Debug.Log("[DCGOSKIN] " + s);
+                          " skinnedBtn=" + skinned + " hidden=" + hidden + " masksOff=" + masks);
+                if (survivors != null) foreach (var s in survivors) Debug.Log("[DCGOSKIN survivor] " + s);
             }
         }
 
-        // Comportamento conservador dentro da partida: nao redesenha, so evita
-        // caixas brancas cobrindo o campo (igual ao fix antigo).
-        static void Conservative(Image img)
+        // Escolhe a imagem de fundo de um botao: o targetGraphic se estiver quebrado,
+        // senao a maior Image quebrada dentro dele (preferindo nome "BackGround").
+        Image PickButtonBackground(Selectable sel)
         {
-            if (img.sprite != null || img.color != Color.white) return;
-            bool interactive = img.GetComponent<Selectable>()
-                || (img.transform.parent && img.transform.parent.GetComponent<Selectable>());
-            if (interactive) img.color = new Color(0.22f, 0.34f, 0.52f, 1f);
-            else { img.color = new Color(1f, 1f, 1f, 0f); img.raycastTarget = false; }
+            var tg = sel.targetGraphic as Image;
+            if (tg != null && IsBrokenArt(tg) && tg.GetComponent<Mask>() == null) return tg;
+
+            Image best = null; float bestScore = -1f;
+            foreach (var im in sel.GetComponentsInChildren<Image>(true))
+            {
+                if (im == null || im.GetComponent<Mask>() != null) continue;
+                if (!IsBrokenArt(im)) continue;
+                var s = im.rectTransform.rect.size;
+                float score = Mathf.Abs(s.x * s.y);
+                if (im.name.IndexOf("ackGround") >= 0 || im.name.IndexOf("ackground") >= 0) score += 1e9f;
+                if (score > bestScore) { bestScore = score; best = im; }
+            }
+            return best;
         }
 
-        void SkinButton(Selectable sel, Image img)
+        void SkinButton(Selectable sel, Image bg)
         {
-            img.sprite = _btn;
-            img.type = Image.Type.Sliced;
-            img.color = Color.white;          // a cor real vem do ColorBlock (multiplica)
-            img.raycastTarget = true;
+            bg.sprite = _btn;
+            bg.type = Image.Type.Sliced;
+            bg.color = Color.white;          // a cor real vem do ColorBlock (multiplica)
+            bg.raycastTarget = true;
 
-            // Estados via ColorTint (o sprite original de hover/press esta faltando).
             sel.transition = Selectable.Transition.ColorTint;
-            sel.targetGraphic = img;
+            sel.targetGraphic = bg;
             var cb = sel.colors;
             cb.normalColor      = new Color(0.13f, 0.20f, 0.34f, 0.95f);
             cb.highlightedColor = new Color(0.20f, 0.32f, 0.52f, 1f);
@@ -178,6 +201,17 @@ namespace DcgoWebBuild
             img.raycastTarget = false;               // e para de bloquear cliques
         }
 
+        // Comportamento conservador dentro da partida: so evita caixas brancas.
+        static void Conservative(Image img)
+        {
+            if (img.sprite != null || img.color != Color.white) return;
+            if (img.GetComponent<Mask>() != null) return;
+            bool interactive = img.GetComponent<Selectable>()
+                || (img.transform.parent && img.transform.parent.GetComponent<Selectable>());
+            if (interactive) img.color = new Color(0.22f, 0.34f, 0.52f, 1f);
+            else { img.color = new Color(1f, 1f, 1f, 0f); img.raycastTarget = false; }
+        }
+
         // ------------------------------------------------------------- helpers ----
 
         static bool BrokenShader(Material m)
@@ -187,25 +221,27 @@ namespace DcgoWebBuild
 
         static bool IsBrokenArt(Image img)
         {
-            if (img.sprite == null) return true;
-            if (img.sprite.texture == null) return true;
+            return img.sprite == null || img.sprite.texture == null;
+        }
+
+        static bool HasMissingScript(GameObject go)
+        {
+            var cs = go.GetComponents<Component>();
+            for (int i = 0; i < cs.Length; i++) if (cs[i] == null) return true;
             return false;
         }
 
-        static Selectable SelectableOf(Image img)
+        static bool Big(Image img)
         {
-            var s = img.GetComponent<Selectable>();
-            if (s != null) return s;
-            var p = img.transform.parent;
-            if (p) { var ps = p.GetComponent<Selectable>(); if (ps) return ps; }
-            return null;
+            var s = img.rectTransform.rect.size;
+            return Mathf.Abs(s.x) > 120f && Mathf.Abs(s.y) > 60f;
         }
 
-        // Fundo grande com filhos interativos -> e' um dialogo/janela: vira painel.
+        // Fundo grande com filhos interativos -> dialogo/janela: vira painel.
         static bool IsDialogBackground(Image img)
         {
             var size = img.rectTransform.rect.size;
-            if (size.x < 260f || size.y < 150f) return false;
+            if (Mathf.Abs(size.x) < 260f || Mathf.Abs(size.y) < 150f) return false;
             return img.GetComponentInChildren<Selectable>(true) != null;
         }
 
@@ -230,13 +266,12 @@ namespace DcgoWebBuild
         static string Path(Transform t)
         {
             var sb = new System.Text.StringBuilder(t.name);
-            var p = t.parent;
-            int depth = 0;
+            var p = t.parent; int depth = 0;
             while (p != null && depth < 4) { sb.Insert(0, p.name + "/"); p = p.parent; depth++; }
             return sb.ToString();
         }
 
-        // Sprite branco de cantos arredondados (tingido via cor / ColorBlock), com
+        // Sprite branco de cantos arredondados (tingido via cor/ColorBlock), com
         // borda de 9-slice = raio para os cantos nao esticarem ao escalar.
         static Sprite MakeRounded(int size, int radius)
         {
@@ -257,8 +292,8 @@ namespace DcgoWebBuild
         static float RoundedAlpha(int x, int y, int size, int r)
         {
             float fx = x + 0.5f, fy = y + 0.5f;
-            float cx = Mathf.Min(fx, size - fx);   // dist ate a borda vertical mais perto
-            float cy = Mathf.Min(fy, size - fy);   // dist ate a borda horizontal mais perto
+            float cx = Mathf.Min(fx, size - fx);
+            float cy = Mathf.Min(fy, size - fy);
             if (cx < r && cy < r)
             {
                 float dx = r - cx, dy = r - cy;
