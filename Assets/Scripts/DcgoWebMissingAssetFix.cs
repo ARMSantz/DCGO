@@ -49,6 +49,7 @@ namespace DcgoWebBuild
         readonly HashSet<int> _seenSel = new HashSet<int>();   // Selectables ja tratados
         readonly HashSet<int> _btnImg  = new HashSet<int>();   // Images que sao fundo de botao
         readonly HashSet<int> _doneImg = new HashSet<int>();   // Images de poluicao ja tratadas
+        readonly HashSet<int> _surv    = new HashSet<int>();   // survivors ja logados
         bool _logged;
 
         void Start()
@@ -61,7 +62,7 @@ namespace DcgoWebBuild
 
         void OnScene(Scene s, LoadSceneMode m)
         {
-            _seenSel.Clear(); _btnImg.Clear(); _doneImg.Clear(); _logged = false;
+            _seenSel.Clear(); _btnImg.Clear(); _doneImg.Clear(); _surv.Clear(); _logged = false;
         }
 
         IEnumerator Loop()
@@ -94,7 +95,6 @@ namespace DcgoWebBuild
             }
 
             int skinned = 0, hidden = 0, masks = 0;
-            List<string> survivors = _logged ? null : new List<string>();
 
             // (c) BOTOES: um passe por Selectable (pega fundo em qualquer profundidade).
             foreach (var sel in Object.FindObjectsOfType<Selectable>(true))
@@ -124,27 +124,27 @@ namespace DcgoWebBuild
 
                 if (!_doneImg.Add(id)) continue;
 
-                if (HasMissingScript(img.gameObject) || IsBrokenArt(img))
+                if (HasMissingScriptUp(img.transform, 2) || IsBrokenArt(img))
                 {
                     if (IsDialogBackground(img) && !IsFullscreen(img)) SkinPanel(img);
                     else Hide(img);   // fullscreen/pequeno -> so transparente
                     hidden++;
                 }
-                else if (survivors != null && survivors.Count < 25
-                         && img.color.a > 0.6f && Big(img))
+                else if (img.color.a > 0.6f && Big(img) && _surv.Add(id) && _surv.Count <= 40)
                 {
                     // grande, opaco, COM sprite e sem script faltando: sobreviveu.
-                    // Registro pra eu ver se ainda e' poluicao a tratar.
-                    survivors.Add(Path(img.transform) + "  sprite=" + (img.sprite ? img.sprite.name : "NULL"));
+                    // Registro (uma vez por objeto) pra eu ver o que ainda e' poluicao.
+                    Debug.Log("[DCGOSKIN survivor] " + Path(img.transform)
+                        + "  sprite=" + (img.sprite ? img.sprite.name : "NULL")
+                        + "  size=" + img.rectTransform.rect.size);
                 }
             }
 
-            if (!_logged)
+            if (skinned > 0 || hidden > 0 || !_logged)
             {
                 _logged = true;
                 Debug.Log("[DCGOSKIN] scene=" + SceneManager.GetActiveScene().name +
                           " skinnedBtn=" + skinned + " hidden=" + hidden + " masksOff=" + masks);
-                if (survivors != null) foreach (var s in survivors) Debug.Log("[DCGOSKIN survivor] " + s);
             }
         }
 
@@ -239,6 +239,15 @@ namespace DcgoWebBuild
         {
             var cs = go.GetComponents<Component>();
             for (int i = 0; i < cs.Length; i++) if (cs[i] == null) return true;
+            return false;
+        }
+
+        // Decoracoes quebradas (ex.: SciFi_*) tem o script faltando na RAIZ e a Image
+        // num filho — por isso subimos alguns niveis procurando o script ausente.
+        static bool HasMissingScriptUp(Transform t, int levels)
+        {
+            for (int i = 0; t != null && i <= levels; i++, t = t.parent)
+                if (HasMissingScript(t.gameObject)) return true;
             return false;
         }
 
