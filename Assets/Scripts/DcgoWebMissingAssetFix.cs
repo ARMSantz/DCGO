@@ -82,10 +82,21 @@ namespace DcgoWebBuild
                 if (r && (r.sharedMaterial == null || BrokenShader(r.sharedMaterial)))
                     r.enabled = false;
 
-            // (b) UI com material de erro -> volta ao material padrao.
+            // (b) UI com material/shader de erro (ex.: GlowImage/UIEffect com shader
+            //     removido no stripping). Se for TEXTO ou BOTAO, volta ao material
+            //     padrao pra continuar legivel/clicavel. Se for DECORACAO (glow), o
+            //     sprite e' um gradiente branco aditivo que, com material normal, vira
+            //     uma CAIXA BRANCA -> desabilita o Graphic pra sumir.
             foreach (var g in Object.FindObjectsOfType<Graphic>(true))
-                if (g && BrokenShader(g.material))
-                    g.material = null;
+            {
+                if (!g || !BrokenShader(g.material)) continue;
+                if (battle) { g.material = null; continue; }
+                bool keep = g is Text || IsTMP(g)
+                            || g.GetComponent<Selectable>() != null
+                            || (g.transform.parent && g.transform.parent.GetComponent<Selectable>() != null);
+                if (keep) g.material = null;
+                else g.enabled = false;
+            }
 
             if (battle)
             {
@@ -130,12 +141,16 @@ namespace DcgoWebBuild
                     else Hide(img);   // fullscreen/pequeno -> so transparente
                     hidden++;
                 }
-                else if (img.color.a > 0.6f && Big(img) && _surv.Add(id) && _surv.Count <= 40)
+                else if (img.color.a > 0.6f && Big(img) && img.gameObject.activeInHierarchy
+                         && _surv.Add(id) && _surv.Count <= 40)
                 {
-                    // grande, opaco, COM sprite e sem script faltando: sobreviveu.
-                    // Registro (uma vez por objeto) pra eu ver o que ainda e' poluicao.
+                    // grande, opaco, ATIVO e sem arte quebrada: sobreviveu visivel.
+                    // Loga sprite+shader+material pra eu identificar (ex.: glow branco).
+                    var mat = img.material;
+                    var shName = mat && mat.shader ? mat.shader.name : "?";
                     Debug.Log("[DCGOSKIN survivor] " + Path(img.transform)
                         + "  sprite=" + (img.sprite ? img.sprite.name : "NULL")
+                        + "  shader=" + shName
                         + "  size=" + img.rectTransform.rect.size);
                 }
             }
@@ -239,6 +254,12 @@ namespace DcgoWebBuild
             // circle...); as caixas brancas de botao/painel vem com nome vazio.
             if (string.IsNullOrEmpty(s.name)) return true;
             return false;
+        }
+
+        static bool IsTMP(Graphic g)
+        {
+            var n = g.GetType().Name;
+            return n.IndexOf("TextMeshPro") >= 0 || n.IndexOf("TMP_") >= 0;
         }
 
         static bool HasMissingScript(GameObject go)
