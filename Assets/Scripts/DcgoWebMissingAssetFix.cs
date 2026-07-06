@@ -69,9 +69,12 @@ namespace DcgoWebBuild
 
         void Skin()
         {
-            // ESCOPO ESTRITO: NUNCA rodar na partida. A BattleScene fica 100% intacta
-            // (cartas, campo, popups de efeito). O menu do DCGO vive na cena "Opening".
-            if (SceneManager.GetActiveScene().name == "BattleScene") return;
+            // ESCOPO ESTRITO: NUNCA rodar durante a partida. ATENCAO: a BattleScene e'
+            // carregada ADITIVA e a cena ATIVA continua "Opening" — checar a cena ativa
+            // NAO basta. Enquanto a BattleScene existir (carregada), pular tudo: assim
+            // FindObjectsOfType nunca toca nas cartas/campo. Ao fim da partida ela e'
+            // descarregada e o menu volta a ser skinnado.
+            if (SceneManager.GetSceneByName("BattleScene").isLoaded) return;
 
             // (a) Magenta: SO renderers com shader de ERRO (InternalError). NAO mexer em
             //     material nulo — carta/preview carregando a textura tem material nulo por
