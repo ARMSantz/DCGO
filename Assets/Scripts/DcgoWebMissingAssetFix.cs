@@ -232,7 +232,13 @@ namespace DcgoWebBuild
 
         static bool IsBrokenArt(Image img)
         {
-            return img.sprite == null || img.sprite.texture == null;
+            var s = img.sprite;
+            if (s == null || s.texture == null) return true;
+            // Placeholder de arte faltando: sprite existe mas SEM NOME (textura branca).
+            // As artes reais do menu tem nome (Japan, background_opening1, titleLogo5,
+            // circle...); as caixas brancas de botao/painel vem com nome vazio.
+            if (string.IsNullOrEmpty(s.name)) return true;
+            return false;
         }
 
         static bool HasMissingScript(GameObject go)
@@ -266,7 +272,9 @@ namespace DcgoWebBuild
             if (crt == null) return false;
             var c = crt.rect.size; var b = img.rectTransform.rect.size;
             if (c.x <= 1f || c.y <= 1f) return false;
-            return Mathf.Abs(b.x) > 0.7f * Mathf.Abs(c.x) && Mathf.Abs(b.y) > 0.7f * Mathf.Abs(c.y);
+            // >85% em ambas as dimensoes = catcher de clique / fundo de tela cheia.
+            // Paineis de janela (config/deck, ~75%) ficam abaixo disso e viram painel.
+            return Mathf.Abs(b.x) > 0.85f * Mathf.Abs(c.x) && Mathf.Abs(b.y) > 0.85f * Mathf.Abs(c.y);
         }
 
         // Fundo grande com filhos interativos -> dialogo/janela: vira painel.
@@ -317,8 +325,10 @@ namespace DcgoWebBuild
             tex.SetPixels32(px);
             tex.Apply();
             var border = new Vector4(radius, radius, radius, radius);
-            return Sprite.Create(tex, new Rect(0, 0, size, size), new Vector2(0.5f, 0.5f),
-                                 100f, 0, SpriteMeshType.FullRect, border);
+            var sp = Sprite.Create(tex, new Rect(0, 0, size, size), new Vector2(0.5f, 0.5f),
+                                   100f, 0, SpriteMeshType.FullRect, border);
+            sp.name = "DcgoSkinRounded";
+            return sp;
         }
 
         static float RoundedAlpha(int x, int y, int size, int r)
