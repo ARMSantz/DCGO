@@ -126,8 +126,8 @@ namespace DcgoWebBuild
 
                 if (HasMissingScript(img.gameObject) || IsBrokenArt(img))
                 {
-                    if (IsDialogBackground(img)) SkinPanel(img);
-                    else Hide(img);
+                    if (IsDialogBackground(img) && !IsFullscreen(img)) SkinPanel(img);
+                    else Hide(img);   // fullscreen/pequeno -> so transparente
                     hidden++;
                 }
                 else if (survivors != null && survivors.Count < 25
@@ -170,6 +170,15 @@ namespace DcgoWebBuild
 
         void SkinButton(Selectable sel, Image bg)
         {
+            // Catcher de clique de tela cheia (ex.: "CLICK TO START", fundo atras de
+            // dialogo): mantem clicavel mas INVISIVEL — nunca vira caixa azul gigante.
+            if (IsFullscreen(bg))
+            {
+                bg.color = new Color(1f, 1f, 1f, 0f);
+                bg.raycastTarget = true;
+                return;
+            }
+
             bg.sprite = _btn;
             bg.type = Image.Type.Sliced;
             bg.color = Color.white;          // a cor real vem do ColorBlock (multiplica)
@@ -197,8 +206,10 @@ namespace DcgoWebBuild
 
         static void Hide(Image img)
         {
-            img.color = new Color(1f, 1f, 1f, 0f);   // some com a caixa branca
-            img.raycastTarget = false;               // e para de bloquear cliques
+            // So transparencia. NAO mexer em raycastTarget: telas como o "CLICK TO
+            // START" usam um Image transparente + EventTrigger de tela cheia pra pegar
+            // o clique; desligar o raycast quebraria a navegacao.
+            img.color = new Color(1f, 1f, 1f, 0f);
         }
 
         // Comportamento conservador dentro da partida: so evita caixas brancas.
@@ -209,7 +220,7 @@ namespace DcgoWebBuild
             bool interactive = img.GetComponent<Selectable>()
                 || (img.transform.parent && img.transform.parent.GetComponent<Selectable>());
             if (interactive) img.color = new Color(0.22f, 0.34f, 0.52f, 1f);
-            else { img.color = new Color(1f, 1f, 1f, 0f); img.raycastTarget = false; }
+            else img.color = new Color(1f, 1f, 1f, 0f);
         }
 
         // ------------------------------------------------------------- helpers ----
@@ -235,6 +246,18 @@ namespace DcgoWebBuild
         {
             var s = img.rectTransform.rect.size;
             return Mathf.Abs(s.x) > 120f && Mathf.Abs(s.y) > 60f;
+        }
+
+        // Ocupa a maior parte do Canvas -> e' um catcher de clique, nao um botao real.
+        static bool IsFullscreen(Image img)
+        {
+            var canvas = img.canvas;
+            if (canvas == null) return false;
+            var crt = canvas.transform as RectTransform;
+            if (crt == null) return false;
+            var c = crt.rect.size; var b = img.rectTransform.rect.size;
+            if (c.x <= 1f || c.y <= 1f) return false;
+            return Mathf.Abs(b.x) > 0.7f * Mathf.Abs(c.x) && Mathf.Abs(b.y) > 0.7f * Mathf.Abs(c.y);
         }
 
         // Fundo grande com filhos interativos -> dialogo/janela: vira painel.
