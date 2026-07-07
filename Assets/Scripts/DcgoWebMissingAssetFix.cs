@@ -40,17 +40,21 @@ namespace DcgoWebBuild
             go.AddComponent<DcgoWebMenuSkin>();
         }
 
-        Sprite _btn, _panel;
+        Sprite _btn, _panel, _bg;
         readonly HashSet<int> _seenSel = new HashSet<int>();   // Selectables ja tratados
         readonly HashSet<int> _btnImg  = new HashSet<int>();   // Images que sao fundo de botao
         readonly HashSet<int> _doneImg = new HashSet<int>();   // Images de poluicao ja tratadas
         readonly HashSet<int> _diag    = new HashSet<int>();   // ja logados no diagnostico
+        readonly HashSet<int> _rawHidden = new HashSet<int>(); // RawImages escondidas (sem textura)
         bool _logged;
 
         void Start()
         {
             _btn   = MakeRounded(48, 12);   // botao: cantos medios
             _panel = MakeRounded(72, 24);   // painel/dialogo: cantos grandes
+            _bg    = MakeVerticalGradient(96,
+                         new Color32(24, 40, 68, 255),    // topo: azul profundo
+                         new Color32(8, 14, 26, 255));    // base: quase preto
             SceneManager.sceneLoaded += OnScene;
             StartCoroutine(Loop());
         }
@@ -84,20 +88,37 @@ namespace DcgoWebBuild
                 if (r && BrokenShader(r.sharedMaterial))
                     r.enabled = false;
 
-            // (a2) PARTICULAS DE FUNDO do menu (Opening._backgroundParticles) com textura
-            //      faltando renderizam CAIXAS BRANCAS de "glow". So rodamos no menu (a
-            //      partida ja saiu por causa do isLoaded acima), entao desligar particula
-            //      sem textura/quebrada e' seguro — ha ate um toggle de config pra isso.
+            // (a2) PARTICULAS DE FUNDO do menu (PixelRise/PixelStorm/Circuits) rendem
+            //      CAIXAS BRANCAS mesmo em GPU real (o blend/arte original nao veio no
+            //      repo publico) — validado pelo usuario. Ficam desligadas por padrao,
+            //      junto com qualquer particula sem textura ou com shader quebrado.
             foreach (var ps in Object.FindObjectsOfType<ParticleSystem>(true))
             {
                 var pr = ps ? ps.GetComponent<ParticleSystemRenderer>() : null;
                 if (pr == null) continue;
                 var pm = pr.sharedMaterial;
-                bool kill = pm == null || pm.mainTexture == null || BrokenShader(pm);
-                if (!_logged && _diag.Add(ps.GetInstanceID()) && _diag.Count <= 60)
-                    Debug.Log("[DCGOSKIN p] " + ps.name + " tex=" + (pm && pm.mainTexture ? pm.mainTexture.name : "NULL")
-                              + " sh=" + (pm && pm.shader ? pm.shader.name : "?") + " kill=" + kill);
+                bool kill = IsBgDeco(ps.transform) || pm == null || pm.mainTexture == null || BrokenShader(pm);
                 if (kill) pr.enabled = false;
+            }
+
+            // (a3) RawImage sem textura renderiza BRANCO (covers de deck carregam a
+            //      textura async). Fica transparente e VOLTA quando a textura chega.
+            foreach (var ri in Object.FindObjectsOfType<RawImage>(true))
+            {
+                if (!ri) continue;
+                int rid = ri.GetInstanceID();
+                if (ri.texture == null)
+                {
+                    if (ri.color.a > 0f)
+                    {
+                        _rawHidden.Add(rid);
+                        ri.color = new Color(ri.color.r, ri.color.g, ri.color.b, 0f);
+                    }
+                }
+                else if (_rawHidden.Remove(rid))
+                {
+                    ri.color = new Color(ri.color.r, ri.color.g, ri.color.b, 1f);
+                }
             }
 
             // (b) UI glow com shader de erro (GlowImage/UIEffect stripados) OU UIParticle
@@ -180,9 +201,19 @@ namespace DcgoWebBuild
                 if (!broken) continue;
                 _doneImg.Add(id);
 
+                // Fundo de tela quebrado (BackGroundObject / LoadingObject) ganha um
+                // degrade azul-escuro em vez de simplesmente sumir — home/loading com
+                // visual limpo e profissional.
+                var par = img.transform.parent;
+                bool bgHost = par != null && (par.name == "BackGroundObject" || par.name == "LoadingObject");
+                if (bgHost && img.GetComponent<UnityEngine.EventSystems.EventTrigger>() == null)
+                {
+                    img.sprite = _bg; img.type = Image.Type.Simple; img.color = Color.white;
+                    hidden++;
+                }
                 // So decoracao/painel: dialogo -> painel escuro; caixa GRANDE -> some.
                 // Caixinha quebrada solta fica como esta (evita apagar algo util).
-                if (IsDialogBackground(img) && !IsFullscreen(img)) { SkinPanel(img); hidden++; }
+                else if (IsDialogBackground(img) && !IsFullscreen(img)) { SkinPanel(img); hidden++; }
                 else if (Big(img) || IsFullscreen(img)) { Hide(img); hidden++; }
             }
 
@@ -272,6 +303,18 @@ namespace DcgoWebBuild
             return m != null && (m.shader == null || m.shader.name == "Hidden/InternalErrorShader");
         }
 
+        // Particulas decorativas do fundo do menu: mesmo com textura valida elas
+        // renderizam caixas brancas no WebGL (validado na GPU real do usuario).
+        static bool IsBgDeco(Transform t)
+        {
+            for (int i = 0; t != null && i < 4; i++, t = t.parent)
+            {
+                var n = t.name;
+                if (n == "PixelRise" || n == "PixelStorm" || n == "Circuits") return true;
+            }
+            return false;
+        }
+
         static bool IsBrokenArt(Image img)
         {
             var s = img.sprite;
@@ -350,6 +393,26 @@ namespace DcgoWebBuild
             var sp = Sprite.Create(tex, new Rect(0, 0, size, size), new Vector2(0.5f, 0.5f),
                                    100f, 0, SpriteMeshType.FullRect, border);
             sp.name = "DcgoSkinRounded";
+            return sp;
+        }
+
+        // Degrade vertical (topo -> base) para fundo de tela profissional.
+        static Sprite MakeVerticalGradient(int size, Color32 top, Color32 bottom)
+        {
+            var tex = new Texture2D(4, size, TextureFormat.RGBA32, false);
+            tex.wrapMode = TextureWrapMode.Clamp;
+            tex.filterMode = FilterMode.Bilinear;
+            var px = new Color32[4 * size];
+            for (int y = 0; y < size; y++)
+            {
+                float f = y / (float)(size - 1);
+                Color32 c = Color32.Lerp(bottom, top, f);
+                for (int x = 0; x < 4; x++) px[y * 4 + x] = c;
+            }
+            tex.SetPixels32(px);
+            tex.Apply();
+            var sp = Sprite.Create(tex, new Rect(0, 0, 4, size), new Vector2(0.5f, 0.5f), 100f);
+            sp.name = "DcgoSkinGradient";
             return sp;
         }
 
