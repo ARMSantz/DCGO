@@ -157,14 +157,28 @@ namespace DcgoWebBuild
                     continue;   // nunca mexe no alfa da mascara (quebraria o recorte)
                 }
 
-                // Parte de um CONTROLE (X de fechar, filtro, checkmark, seta, icone de
-                // botao): NUNCA esconder — perder isso e' perder funcao. Deixa visivel.
-                if (InSelectable(img.transform)) continue;
+                // Dentro de um Selectable: arte VALIDA fica intacta (filtro, checkmark,
+                // seta, X de fechar). Arte QUEBRADA (sprite vazio) e que nao e' o
+                // targetGraphic e' transparentizada — icon de botao sem sprite some
+                // sem quebrar o raycast.
+                if (InSelectable(img.transform))
+                {
+                    if (!IsBrokenArt(img)) continue;
+                    if (_doneImg.Contains(id)) continue;
+                    _doneImg.Add(id);
+                    img.color = new Color(0f, 0f, 0f, 0f);
+                    hidden++;
+                    continue;
+                }
 
-                if (!_doneImg.Add(id)) continue;
+                // _doneImg so' marca quando realmente escondemos — assim imagens que
+                // mudam de sprite valido para vazio (ex.: Background_home1 → null) sao
+                // re-avaliadas no proximo tick e escondidas.
+                if (_doneImg.Contains(id)) continue;
 
                 bool broken = HasMissingScriptUp(img.transform, 2) || IsBrokenArt(img);
                 if (!broken) continue;
+                _doneImg.Add(id);
 
                 // So decoracao/painel: dialogo -> painel escuro; caixa GRANDE -> some.
                 // Caixinha quebrada solta fica como esta (evita apagar algo util).
