@@ -84,12 +84,33 @@ namespace DcgoWebBuild
                 if (r && BrokenShader(r.sharedMaterial))
                     r.enabled = false;
 
-            // (b) UI glow com shader de erro (GlowImage/UIEffect stripados). Texto/botao
-            //     -> volta ao material padrao (legivel/clicavel). Decoracao solta -> some.
+            // (a2) PARTICULAS DE FUNDO do menu (Opening._backgroundParticles) com textura
+            //      faltando renderizam CAIXAS BRANCAS de "glow". So rodamos no menu (a
+            //      partida ja saiu por causa do isLoaded acima), entao desligar particula
+            //      sem textura/quebrada e' seguro — ha ate um toggle de config pra isso.
+            foreach (var ps in Object.FindObjectsOfType<ParticleSystem>(true))
+            {
+                var pr = ps ? ps.GetComponent<ParticleSystemRenderer>() : null;
+                if (pr == null) continue;
+                var pm = pr.sharedMaterial;
+                bool kill = pm == null || pm.mainTexture == null || BrokenShader(pm);
+                if (!_logged && _diag.Add(ps.GetInstanceID()) && _diag.Count <= 60)
+                    Debug.Log("[DCGOSKIN p] " + ps.name + " tex=" + (pm && pm.mainTexture ? pm.mainTexture.name : "NULL")
+                              + " sh=" + (pm && pm.shader ? pm.shader.name : "?") + " kill=" + kill);
+                if (kill) pr.enabled = false;
+            }
+
+            // (b) UI glow com shader de erro (GlowImage/UIEffect stripados) OU UIParticle
+            //     (ParticleEffectForUGUI) sem textura. Texto/botao -> volta ao material
+            //     padrao (legivel/clicavel). Decoracao/particula solta -> some.
             foreach (var g in Object.FindObjectsOfType<Graphic>(true))
             {
-                if (!g || !BrokenShader(g.material)) continue;
-                bool keep = g is Text || IsTMP(g) || InSelectable(g.transform);
+                if (!g) continue;
+                var mat = g.material;
+                bool isParticle = g.GetType().Name.IndexOf("Particle") >= 0;
+                bool whiteParticle = isParticle && (mat == null || mat.mainTexture == null);
+                if (!BrokenShader(mat) && !whiteParticle) continue;
+                bool keep = g is Text || IsTMP(g) || (!isParticle && InSelectable(g.transform));
                 if (keep) g.material = null;
                 else g.enabled = false;
             }
