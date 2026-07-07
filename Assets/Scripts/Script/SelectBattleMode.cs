@@ -145,55 +145,158 @@ public class SelectBattleMode : MonoBehaviour
         {
             ContinuousController.instance.AIBattleDeckData = null;
 
-            // Step 1 – player deck selection
+            // Etapa 1 – deck do jogador (fluxo original)
             Opening.instance.battle.selectBattleDeck.SetUpSelectBattleDeck(() =>
             {
-                Opening.instance.battle.selectBattleDeck.OnClickSelectButton_BotMatch();
+                SelectBattleDeck sbd = Opening.instance.battle.selectBattleDeck;
 
-                // Step 2 – bot deck selection
-                Opening.instance.battle.selectBattleDeck.TitleText.text =
-                    LocalizeUtility.GetLocalizedString(
-                        EngMessage: "Select Bot Deck  (close → random)",
-                        JpnMessage: "Botのデッキを選択 (閉じる=ランダム)");
+                sbd.OnClickSelectButton_BotMatch();
 
-                var skipGO = UnityEngine.Object.Instantiate(
-                    Opening.instance.battle.selectBattleDeck.SelectDeckButton.gameObject,
-                    Opening.instance.battle.selectBattleDeck.SelectDeckButton.transform.parent);
-                skipGO.name = "BotRandomSkipButton";
-                var skipBtn = skipGO.GetComponent<UnityEngine.UI.Button>();
-                var skipTxt = skipGO.GetComponentInChildren<UnityEngine.UI.Text>();
-                if (skipTxt != null) skipTxt.text = LocalizeUtility.GetLocalizedString(
-                    EngMessage: "Random Bot", JpnMessage: "ランダム");
-                skipBtn.interactable = true;
-                skipBtn.onClick.RemoveAllListeners();
-                skipBtn.onClick.AddListener(() =>
+                DeckData playerDeck = ContinuousController.instance.BattleDeckData;
+                string playerDeckName = playerDeck != null ? playerDeck.DeckName : "-";
+
+                bool battleStarted = false;
+                GameObject bannerGO = null;
+
+                Text selLabel = sbd.SelectDeckButton.GetComponentInChildren<Text>(true);
+                string selLabelOriginal = selLabel != null ? selLabel.text : null;
+
+                // Sprite proprio e NOMEADO para a UI da etapa 2 — a camada de skin
+                // (DcgoWebMenuSkin) ignora sprites com nome, entao nada aqui e'
+                // escondido ou re-skinnado por engano.
+                Texture2D solidTex = new Texture2D(2, 2, TextureFormat.RGBA32, false);
+                solidTex.SetPixels32(new Color32[] {
+                    new Color32(255,255,255,255), new Color32(255,255,255,255),
+                    new Color32(255,255,255,255), new Color32(255,255,255,255) });
+                solidTex.Apply();
+                Sprite solid = Sprite.Create(solidTex, new Rect(0, 0, 2, 2), new Vector2(0.5f, 0.5f));
+                solid.name = "DcgoBotStepUI";
+
+                void Cleanup()
                 {
-                    UnityEngine.Object.Destroy(skipGO);
-                    Opening.instance.battle.selectBattleDeck.OnCloseSelectBattleDeckAction = null;
-                    ContinuousController.instance.AIBattleDeckData = null;
+                    sbd.OnCloseSelectBattleDeckAction = null;
+                    if (bannerGO != null) { UnityEngine.Object.Destroy(bannerGO); bannerGO = null; }
+                    if (selLabel != null && selLabelOriginal != null) selLabel.text = selLabelOriginal;
+                }
+
+                void StartBattle()
+                {
+                    // Guarda contra clique duplo: carregar a BattleScene 2x (aditiva)
+                    // duplica a UI da partida e trava os botoes do mulligan.
+                    if (battleStarted) return;
+                    battleStarted = true;
+                    Cleanup();
+                    sbd.SelectDeckObject.SetActive(false);
+                    sbd.Off();
                     ContinuousController.instance.StartCoroutine(StartBattleCoroutine());
+                }
+
+                void RestartSelection()
+                {
+                    if (battleStarted) return;
+                    Cleanup();
+                    sbd.SelectDeckObject.SetActive(false);
+                    StartSelectBattleDeck(true);
+                }
+
+                // ---------- Etapa 2 – deck do BOT ----------
+                sbd.TitleText.text = LocalizeUtility.GetLocalizedString(
+                    EngMessage: "STEP 2/2 — CHOOSE THE BOT'S DECK",
+                    JpnMessage: "ステップ 2/2 — Botのデッキを選択");
+
+                if (selLabel != null) selLabel.text = LocalizeUtility.GetLocalizedString(
+                    EngMessage: "Use as\nBOT deck",
+                    JpnMessage: "Botのデッキ\nに使う");
+
+                bannerGO = new GameObject("BotStepBanner");
+                bannerGO.transform.SetParent(sbd.SelectDeckObject.transform, false);
+                Image bannerImg = bannerGO.AddComponent<Image>();
+                bannerImg.sprite = solid;
+                bannerImg.color = new Color(0.03f, 0.08f, 0.15f, 0.97f);
+                RectTransform bRT = bannerGO.GetComponent<RectTransform>();
+                bRT.anchorMin = new Vector2(0.5f, 0f);
+                bRT.anchorMax = new Vector2(0.5f, 0f);
+                bRT.pivot = new Vector2(0.5f, 0f);
+                bRT.sizeDelta = new Vector2(1560f, 110f);
+                bRT.anchoredPosition = new Vector2(0f, 18f);
+
+                GameObject infoGO = new GameObject("Info");
+                infoGO.transform.SetParent(bannerGO.transform, false);
+                Text info = infoGO.AddComponent<Text>();
+                info.font = sbd.TitleText.font;
+                info.fontSize = 26;
+                info.color = Color.white;
+                info.alignment = TextAnchor.MiddleLeft;
+                info.text = LocalizeUtility.GetLocalizedString(
+                    EngMessage: "Your deck: " + playerDeckName + "  ✔\nPick the BOT's deck and press \"Use as BOT deck\" — or start with a random one.",
+                    JpnMessage: "自分のデッキ: " + playerDeckName + " ✔\nBotのデッキを選ぶか、ランダムで開始してください。");
+                RectTransform iRT = infoGO.GetComponent<RectTransform>();
+                iRT.anchorMin = new Vector2(0f, 0f);
+                iRT.anchorMax = new Vector2(0.52f, 1f);
+                iRT.offsetMin = new Vector2(28f, 6f);
+                iRT.offsetMax = new Vector2(-6f, -6f);
+
+                Button MakeBannerButton(string label, float xMin, float xMax, UnityEngine.Events.UnityAction act)
+                {
+                    GameObject go = new GameObject("Btn_" + xMin);
+                    go.transform.SetParent(bannerGO.transform, false);
+                    Image bg = go.AddComponent<Image>();
+                    bg.sprite = solid;
+                    bg.color = new Color(0.15f, 0.28f, 0.48f, 1f);
+                    Button b = go.AddComponent<Button>();
+                    b.targetGraphic = bg;
+                    RectTransform rt = go.GetComponent<RectTransform>();
+                    rt.anchorMin = new Vector2(xMin, 0f);
+                    rt.anchorMax = new Vector2(xMax, 1f);
+                    rt.offsetMin = new Vector2(8f, 14f);
+                    rt.offsetMax = new Vector2(-8f, -14f);
+                    GameObject lgo = new GameObject("Label");
+                    lgo.transform.SetParent(go.transform, false);
+                    Text lt = lgo.AddComponent<Text>();
+                    lt.font = sbd.TitleText.font;
+                    lt.fontSize = 24;
+                    lt.color = Color.white;
+                    lt.alignment = TextAnchor.MiddleCenter;
+                    lt.text = label;
+                    RectTransform lrt = lgo.GetComponent<RectTransform>();
+                    lrt.anchorMin = Vector2.zero;
+                    lrt.anchorMax = Vector2.one;
+                    lrt.offsetMin = Vector2.zero;
+                    lrt.offsetMax = Vector2.zero;
+                    b.onClick.AddListener(act);
+                    return b;
+                }
+
+                MakeBannerButton(LocalizeUtility.GetLocalizedString(
+                    EngMessage: "START — RANDOM BOT DECK",
+                    JpnMessage: "ランダムBotで開始"),
+                    0.53f, 0.78f, () =>
+                {
+                    ContinuousController.instance.AIBattleDeckData = null;
+                    StartBattle();
                 });
 
-                // Cancel (close) → back to step 1
-                Opening.instance.battle.selectBattleDeck.OnCloseSelectBattleDeckAction = () =>
-                {
-                    UnityEngine.Object.Destroy(skipGO);
-                    Opening.instance.battle.selectBattleDeck.SelectDeckObject.SetActive(false);
-                    StartSelectBattleDeck(true);
-                };
+                MakeBannerButton(LocalizeUtility.GetLocalizedString(
+                    EngMessage: "← CHANGE MY DECK",
+                    JpnMessage: "← 自分のデッキを変更"),
+                    0.79f, 0.99f, RestartSelection);
 
-                // Confirm → use selected deck as bot deck
-                Opening.instance.battle.selectBattleDeck.deckInfoPanel.OnClickSelectDeckAction = () =>
+                // Confirmar: o botao "Select" do painel agora define o deck do BOT.
+                // Copia o deck (mesmo padrao do RandomDeck original) para nunca
+                // compartilhar a mesma instancia com o deck do jogador.
+                sbd.deckInfoPanel.OnClickSelectDeckAction = () =>
                 {
+                    DeckData botDeck = sbd.deckInfoPanel.ShowingDeckData;
+                    if (botDeck == null || !botDeck.IsValidDeckData()) return;
                     ContinuousController.instance.AIBattleDeckData =
-                        Opening.instance.battle.selectBattleDeck.deckInfoPanel.ShowingDeckData;
-                    UnityEngine.Object.Destroy(skipGO);
-                    Opening.instance.battle.selectBattleDeck.OnCloseSelectBattleDeckAction = null;
-                    ContinuousController.instance.StartCoroutine(StartBattleCoroutine());
+                        new DeckData(botDeck.GetThisDeckCode(), botDeck.DeckID);
+                    StartBattle();
                 };
 
-                ContinuousController.instance.StartCoroutine(
-                    Opening.instance.battle.selectBattleDeck.SetDeckList(false));
+                // Fechar o painel na etapa 2 = cancelar e voltar a etapa 1
+                sbd.OnCloseSelectBattleDeckAction = RestartSelection;
+
+                ContinuousController.instance.StartCoroutine(sbd.SetDeckList(false));
 
             }, 0);
         }
