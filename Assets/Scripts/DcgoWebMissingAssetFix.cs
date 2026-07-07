@@ -115,6 +115,20 @@ namespace DcgoWebBuild
                 int id = img.GetInstanceID();
                 if (_btnImg.Contains(id)) continue;   // e' fundo de botao, ja tratado
 
+                // DIAG: TODA imagem grande/opaca/ativa (inclusive dentro de Selectable e
+                // mascara) — pra achar as caixas de glow que escapam dos filtros.
+                if (img.gameObject.activeInHierarchy && img.color.a > 0.5f && Big(img)
+                    && _diag.Add(id) && _diag.Count <= 60)
+                {
+                    var mat = img.material; var sh = mat && mat.shader ? mat.shader.name : "?";
+                    Debug.Log("[DCGOSKIN d] " + img.transform.name
+                        + " parent=" + (img.transform.parent ? img.transform.parent.name : "-")
+                        + " sprite=" + (img.sprite ? img.sprite.name : "NULL")
+                        + " sel=" + InSelectable(img.transform)
+                        + " mask=" + (img.GetComponent<Mask>() != null)
+                        + " sh=" + sh + " size=" + img.rectTransform.rect.size);
+                }
+
                 var mask = img.GetComponent<Mask>();
                 if (mask != null)
                 {
@@ -129,20 +143,6 @@ namespace DcgoWebBuild
                 if (!_doneImg.Add(id)) continue;
 
                 bool broken = HasMissingScriptUp(img.transform, 2) || IsBrokenArt(img);
-
-                // DIAG: imagem grande, opaca e ATIVA, fora de botao/controle. Candidata
-                // a "glow" branco. Loga nome/sprite/shader/broken pra caca de precisao.
-                if (img.gameObject.activeInHierarchy && img.color.a > 0.5f && Big(img)
-                    && _diag.Add(id) && _diag.Count <= 50)
-                {
-                    var mat = img.material; var sh = mat && mat.shader ? mat.shader.name : "?";
-                    Debug.Log("[DCGOSKIN d] " + img.transform.name
-                        + " parent=" + (img.transform.parent ? img.transform.parent.name : "-")
-                        + " sprite=" + (img.sprite ? img.sprite.name : "NULL")
-                        + " broken=" + broken + " shader=" + sh
-                        + " size=" + img.rectTransform.rect.size);
-                }
-
                 if (!broken) continue;
 
                 // So decoracao/painel: dialogo -> painel escuro; caixa GRANDE -> some.
