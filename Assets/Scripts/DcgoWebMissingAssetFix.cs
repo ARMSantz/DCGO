@@ -44,6 +44,7 @@ namespace DcgoWebBuild
         readonly HashSet<int> _seenSel = new HashSet<int>();   // Selectables ja tratados
         readonly HashSet<int> _btnImg  = new HashSet<int>();   // Images que sao fundo de botao
         readonly HashSet<int> _doneImg = new HashSet<int>();   // Images de poluicao ja tratadas
+        readonly HashSet<int> _diag    = new HashSet<int>();   // ja logados no diagnostico
         bool _logged;
 
         void Start()
@@ -56,7 +57,7 @@ namespace DcgoWebBuild
 
         void OnScene(Scene s, LoadSceneMode m)
         {
-            _seenSel.Clear(); _btnImg.Clear(); _doneImg.Clear(); _logged = false;
+            _seenSel.Clear(); _btnImg.Clear(); _doneImg.Clear(); _diag.Clear(); _logged = false;
         }
 
         IEnumerator Loop()
@@ -128,6 +129,20 @@ namespace DcgoWebBuild
                 if (!_doneImg.Add(id)) continue;
 
                 bool broken = HasMissingScriptUp(img.transform, 2) || IsBrokenArt(img);
+
+                // DIAG: imagem grande, opaca e ATIVA, fora de botao/controle. Candidata
+                // a "glow" branco. Loga nome/sprite/shader/broken pra caca de precisao.
+                if (img.gameObject.activeInHierarchy && img.color.a > 0.5f && Big(img)
+                    && _diag.Add(id) && _diag.Count <= 50)
+                {
+                    var mat = img.material; var sh = mat && mat.shader ? mat.shader.name : "?";
+                    Debug.Log("[DCGOSKIN d] " + img.transform.name
+                        + " parent=" + (img.transform.parent ? img.transform.parent.name : "-")
+                        + " sprite=" + (img.sprite ? img.sprite.name : "NULL")
+                        + " broken=" + broken + " shader=" + sh
+                        + " size=" + img.rectTransform.rect.size);
+                }
+
                 if (!broken) continue;
 
                 // So decoracao/painel: dialogo -> painel escuro; caixa GRANDE -> some.
