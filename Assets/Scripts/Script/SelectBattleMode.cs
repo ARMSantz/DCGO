@@ -143,17 +143,59 @@ public class SelectBattleMode : MonoBehaviour
 
         else
         {
+            ContinuousController.instance.AIBattleDeckData = null;
+
+            // Step 1 – player deck selection
             Opening.instance.battle.selectBattleDeck.SetUpSelectBattleDeck(() =>
             {
                 Opening.instance.battle.selectBattleDeck.OnClickSelectButton_BotMatch();
-                Opening.instance.battle.selectBattleDeck.SetUpBotDeckSelection(() =>
+
+                // Step 2 – bot deck selection
+                Opening.instance.battle.selectBattleDeck.TitleText.text =
+                    LocalizeUtility.GetLocalizedString(
+                        EngMessage: "Select Bot Deck  (close → random)",
+                        JpnMessage: "Botのデッキを選択 (閉じる=ランダム)");
+
+                var skipGO = UnityEngine.Object.Instantiate(
+                    Opening.instance.battle.selectBattleDeck.SelectDeckButton.gameObject,
+                    Opening.instance.battle.selectBattleDeck.SelectDeckButton.transform.parent);
+                skipGO.name = "BotRandomSkipButton";
+                var skipBtn = skipGO.GetComponent<UnityEngine.UI.Button>();
+                var skipTxt = skipGO.GetComponentInChildren<UnityEngine.UI.Text>();
+                if (skipTxt != null) skipTxt.text = LocalizeUtility.GetLocalizedString(
+                    EngMessage: "Random Bot", JpnMessage: "ランダム");
+                skipBtn.interactable = true;
+                skipBtn.onClick.RemoveAllListeners();
+                skipBtn.onClick.AddListener(() =>
                 {
-                    ContinuousController.instance.BotDeckData = Opening.instance.battle.selectBattleDeck.deckInfoPanel.ShowingDeckData;
+                    UnityEngine.Object.Destroy(skipGO);
+                    Opening.instance.battle.selectBattleDeck.OnCloseSelectBattleDeckAction = null;
+                    ContinuousController.instance.AIBattleDeckData = null;
                     ContinuousController.instance.StartCoroutine(StartBattleCoroutine());
                 });
-            }
 
-            , 0);
+                // Cancel (close) → back to step 1
+                Opening.instance.battle.selectBattleDeck.OnCloseSelectBattleDeckAction = () =>
+                {
+                    UnityEngine.Object.Destroy(skipGO);
+                    Opening.instance.battle.selectBattleDeck.SelectDeckObject.SetActive(false);
+                    StartSelectBattleDeck(true);
+                };
+
+                // Confirm → use selected deck as bot deck
+                Opening.instance.battle.selectBattleDeck.deckInfoPanel.OnClickSelectDeckAction = () =>
+                {
+                    ContinuousController.instance.AIBattleDeckData =
+                        Opening.instance.battle.selectBattleDeck.deckInfoPanel.ShowingDeckData;
+                    UnityEngine.Object.Destroy(skipGO);
+                    Opening.instance.battle.selectBattleDeck.OnCloseSelectBattleDeckAction = null;
+                    ContinuousController.instance.StartCoroutine(StartBattleCoroutine());
+                };
+
+                ContinuousController.instance.StartCoroutine(
+                    Opening.instance.battle.selectBattleDeck.SetDeckList(false));
+
+            }, 0);
         }
 
         IEnumerator StartBattleCoroutine()
