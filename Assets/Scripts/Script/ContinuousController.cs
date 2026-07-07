@@ -13,7 +13,7 @@ using UnityEngine.SceneManagement;
 using Hashtable = ExitGames.Client.Photon.Hashtable;
 
 [RequireComponent(typeof(StarterDeck))]
-public class ContinuousController : MonoBehaviour
+public partial class ContinuousController : MonoBehaviour
 {
     private static WaitForSeconds _waitForSeconds0_1 = new WaitForSeconds(0.1f);
     [Header("game language")]
