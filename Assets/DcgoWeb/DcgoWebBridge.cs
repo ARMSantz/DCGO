@@ -9,6 +9,10 @@ public static class DcgoWebBridge
     [DllImport("__Internal")] private static extern string DcgoWeb_GetToken();
     [DllImport("__Internal")] private static extern string DcgoWeb_GetUsername();
     [DllImport("__Internal")] private static extern string DcgoWeb_GetApiBase();
+    [DllImport("__Internal")] private static extern void DcgoWeb_Logout();
+
+    // Desloga: limpa o token e volta para a tela de login.
+    public static void Logout() => DcgoWeb_Logout();
 
     public static string Token => DcgoWeb_GetToken();
 
@@ -34,6 +38,8 @@ public static class DcgoWebBridge
     public static string Token { get; set; } = "";
     public static string Username { get; set; } = "Player";
     public static string ApiBase { get; set; } = "http://localhost:8080";
+
+    public static void Logout() { Token = ""; }
 #endif
 
     public static bool IsLoggedIn => !string.IsNullOrEmpty(Token);
