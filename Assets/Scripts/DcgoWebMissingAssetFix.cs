@@ -41,6 +41,7 @@ namespace DcgoWebBuild
         }
 
         Sprite _btn, _panel, _bg;
+        Font _uiFont;                                          // fonte de UI reaproveitada
         readonly HashSet<int> _seenSel = new HashSet<int>();   // Selectables ja tratados
         readonly HashSet<int> _btnImg  = new HashSet<int>();   // Images que sao fundo de botao
         readonly HashSet<int> _doneImg = new HashSet<int>();   // Images de poluicao ja tratadas
@@ -143,11 +144,32 @@ namespace DcgoWebBuild
             {
                 if (!sel) continue;
                 if (!_seenSel.Add(sel.GetInstanceID())) continue;
+
+                bool isClose = sel.name.IndexOf("Close", System.StringComparison.OrdinalIgnoreCase) >= 0
+                            || sel.name.IndexOf("Return", System.StringComparison.OrdinalIgnoreCase) >= 0;
+
                 var bg = PickButtonBackground(sel);
-                if (bg == null) continue;
-                _btnImg.Add(bg.GetInstanceID());
-                SkinButton(sel, bg);
-                skinned++;
+                if (bg != null)
+                {
+                    _btnImg.Add(bg.GetInstanceID());
+                    SkinButton(sel, bg);
+                    skinned++;
+                }
+                else if (sel.transition == Selectable.Transition.ColorTint)
+                {
+                    // Sem fundo quebrado pra trocar: mas se o botao usa ColorTint sobre
+                    // uma arte transparente/branca, o HOVER pinta ela de branco e cobre
+                    // o texto (ex.: BATTLE/DECK do menu). Neutraliza os estados.
+                    var cb = sel.colors;
+                    cb.highlightedColor = cb.normalColor;
+                    cb.pressedColor     = cb.normalColor;
+                    cb.selectedColor    = cb.normalColor;
+                    sel.colors = cb;
+                }
+
+                // Botao de fechar/voltar sempre com alvo visivel (o "X" some se veio
+                // como sprite quebrado no passo (d)).
+                if (isClose) EnsureCloseButton(sel);
             }
 
             // (d) RESTO: mascaras, paineis de dialogo e caixas brancas GRANDES.
@@ -184,11 +206,23 @@ namespace DcgoWebBuild
                 // sem quebrar o raycast.
                 if (InSelectable(img.transform))
                 {
-                    if (!IsBrokenArt(img)) continue;
-                    if (_doneImg.Contains(id)) continue;
-                    _doneImg.Add(id);
-                    img.color = new Color(0f, 0f, 0f, 0f);
-                    hidden++;
+                    if (IsBrokenArt(img))
+                    {
+                        if (_doneImg.Contains(id)) continue;
+                        _doneImg.Add(id);
+                        img.color = new Color(0f, 0f, 0f, 0f);
+                        hidden++;
+                        continue;
+                    }
+                    // Placa BRANCA de campo (dropdown de filtro etc.): escurece pra ver
+                    // a selecao. NAO tocar em InputField (campo de texto tem letra escura).
+                    if (IsWhitePlate(img) && img.GetComponentInParent<InputField>(true) == null)
+                    {
+                        if (_doneImg.Contains(id)) continue;
+                        _doneImg.Add(id);
+                        img.color = new Color(0.10f, 0.14f, 0.22f, 0.92f);
+                        hidden++;
+                    }
                     continue;
                 }
 
@@ -196,6 +230,16 @@ namespace DcgoWebBuild
                 // mudam de sprite valido para vazio (ex.: Background_home1 → null) sao
                 // re-avaliadas no proximo tick e escondidas.
                 if (_doneImg.Contains(id)) continue;
+
+                // Placa BRANCA solta (ex.: tarja do NOME do deck na listagem): escurece
+                // pra o nome (texto claro) aparecer, em vez de sumir.
+                if (IsWhitePlate(img))
+                {
+                    _doneImg.Add(id);
+                    img.color = new Color(0.10f, 0.14f, 0.22f, 0.92f);
+                    hidden++;
+                    continue;
+                }
 
                 bool broken = HasMissingScriptUp(img.transform, 2) || IsBrokenArt(img);
                 if (!broken) continue;
@@ -253,6 +297,7 @@ namespace DcgoWebBuild
             {
                 bg.color = new Color(1f, 1f, 1f, 0f);
                 bg.raycastTarget = true;
+                sel.transition = Selectable.Transition.None;  // nao piscar branco no hover
                 return;
             }
 
@@ -279,6 +324,70 @@ namespace DcgoWebBuild
             img.sprite = _panel;
             img.type = Image.Type.Sliced;
             img.color = new Color(0.06f, 0.10f, 0.18f, 0.92f);   // azul escuro translucido
+        }
+
+        // Garante um botao de fechar VISIVEL e clicavel: fundo arredondado vermelho-
+        // escuro + um "X" branco, criados uma vez por botao (guardado por nome de filho).
+        void EnsureCloseButton(Selectable sel)
+        {
+            var t = sel.transform;
+            if (t.Find("DcgoCloseGlyph") != null) return;
+
+            // Fundo: usa o targetGraphic se for Image, senao cria um.
+            Image bg = sel.targetGraphic as Image;
+            if (bg == null) bg = sel.GetComponentInChildren<Image>(true);
+            if (bg == null)
+            {
+                var bgGo = new GameObject("DcgoCloseBg");
+                bgGo.transform.SetParent(t, false);
+                bg = bgGo.AddComponent<Image>();
+                var rt = bg.rectTransform;
+                rt.anchorMin = Vector2.zero; rt.anchorMax = Vector2.one;
+                rt.offsetMin = Vector2.zero; rt.offsetMax = Vector2.zero;
+                bgGo.transform.SetAsFirstSibling();
+            }
+            bg.sprite = _btn;
+            bg.type = Image.Type.Sliced;
+            bg.color = new Color(0.55f, 0.16f, 0.16f, 1f);       // vermelho escuro
+            bg.raycastTarget = true;
+            _btnImg.Add(bg.GetInstanceID());
+            sel.targetGraphic = bg;
+            sel.transition = Selectable.Transition.ColorTint;
+            var cb = sel.colors;
+            cb.normalColor = Color.white;
+            cb.highlightedColor = new Color(1f, 0.5f, 0.5f, 1f);
+            cb.pressedColor = new Color(0.7f, 0.2f, 0.2f, 1f);
+            cb.colorMultiplier = 1f;
+            sel.colors = cb;
+
+            var font = UiFont();
+            if (font != null)
+            {
+                var g = new GameObject("DcgoCloseGlyph");
+                g.transform.SetParent(t, false);
+                var txt = g.AddComponent<Text>();
+                txt.font = font;
+                txt.text = "✕";                             // ✕
+                txt.color = Color.white;
+                txt.alignment = TextAnchor.MiddleCenter;
+                txt.resizeTextForBestFit = true;
+                txt.resizeTextMinSize = 8;
+                txt.resizeTextMaxSize = 60;
+                var rt = txt.rectTransform;
+                rt.anchorMin = Vector2.zero; rt.anchorMax = Vector2.one;
+                rt.offsetMin = Vector2.zero; rt.offsetMax = Vector2.zero;
+                g.transform.SetAsLastSibling();
+            }
+        }
+
+        Font UiFont()
+        {
+            if (_uiFont == null)
+            {
+                var anyText = Object.FindObjectOfType<Text>();
+                if (anyText != null) _uiFont = anyText.font;
+            }
+            return _uiFont;
         }
 
         static void Hide(Image img)
@@ -313,6 +422,21 @@ namespace DcgoWebBuild
                 if (n == "PixelRise" || n == "PixelStorm" || n == "Circuits") return true;
             }
             return false;
+        }
+
+        // Placa BRANCA de campo/nome (sprite valido mas cor clara e opaca) que cobre o
+        // conteudo. Tamanho de "faixa" — nao um icone minusculo nem um painel gigante.
+        static bool IsWhitePlate(Image img)
+        {
+            if (img.GetComponent<Mask>() != null) return false;
+            var c = img.color;
+            if (c.a < 0.55f) return false;
+            if (c.r < 0.78f || c.g < 0.78f || c.b < 0.78f) return false;   // precisa ser claro
+            var s = img.rectTransform.rect.size;
+            float w = Mathf.Abs(s.x), h = Mathf.Abs(s.y);
+            if (w < 50f || h < 16f) return false;         // icone/checkmark: deixa
+            if (w > 900f || h > 240f) return false;       // painel grande: outro tratamento
+            return true;
         }
 
         static bool IsBrokenArt(Image img)
