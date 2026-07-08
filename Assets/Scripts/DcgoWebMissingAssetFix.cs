@@ -77,10 +77,12 @@ namespace DcgoWebBuild
         {
             // ESCOPO ESTRITO: NUNCA rodar durante a partida. ATENCAO: a BattleScene e'
             // carregada ADITIVA e a cena ATIVA continua "Opening" — checar a cena ativa
-            // NAO basta. Enquanto a BattleScene existir (carregada), pular tudo: assim
-            // FindObjectsOfType nunca toca nas cartas/campo. Ao fim da partida ela e'
-            // descarregada e o menu volta a ser skinnado.
-            if (SceneManager.GetSceneByName("BattleScene").isLoaded) return;
+            // NAO basta. Usa IsValid() (nao isLoaded): a cena entra na lista JA no comeco
+            // do carregamento assincrono, entao pulamos tambem a JANELA de load — assim
+            // FindObjectsOfType nunca toca no campo/cartas nem por um instante. Ao fim da
+            // partida ela e' descarregada e o menu volta a ser skinnado.
+            var battleScene = SceneManager.GetSceneByName("BattleScene");
+            if (battleScene.IsValid() || battleScene.isLoaded) return;
 
             // (a) Magenta: SO renderers com shader de ERRO (InternalError). NAO mexer em
             //     material nulo — carta/preview carregando a textura tem material nulo por
@@ -441,7 +443,10 @@ namespace DcgoWebBuild
             var s = img.rectTransform.rect.size;
             float w = Mathf.Abs(s.x), h = Mathf.Abs(s.y);
             if (w < 50f || h < 16f) return false;         // icone/checkmark: deixa
-            if (w > 900f || h > 240f) return false;       // painel grande: outro tratamento
+            // So BARRAS FINAS (nome de deck, campo de filtro). Miniatura/capa de deck e'
+            // ALTA (~100px+) e carrega arte async — nunca escurecer, senao a arte some
+            // ate a proxima reconstrucao da lista.
+            if (w > 900f || h > 70f) return false;
             return true;
         }
 
