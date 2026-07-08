@@ -88,6 +88,9 @@ namespace DcgoWebBuild
             // Saiu da partida: limpa o rastro de recoloracao (ids ja destruidos).
             if (_battleColor.Count > 0) _battleColor.Clear();
 
+            // Botao de LOGOUT no canto do menu (cria uma vez).
+            EnsureLogoutButton();
+
             // (a) Magenta: SO renderers com shader de ERRO (InternalError). NAO mexer em
             //     material nulo — carta/preview carregando a textura tem material nulo por
             //     um instante e nao pode ser desabilitada pra sempre.
@@ -316,6 +319,136 @@ namespace DcgoWebBuild
                     _battleColor.Remove(id);
                 }
             }
+        }
+
+        // ------------------------------------------------------------- logout ----
+
+        // Canvas de tela do menu (cena "Opening"), para pendurar o botao e o dialogo.
+        Canvas MenuCanvas()
+        {
+            Canvas fallback = null;
+            foreach (var c in Object.FindObjectsOfType<Canvas>())
+            {
+                if (!c || !c.isRootCanvas || c.renderMode == RenderMode.WorldSpace) continue;
+                if (fallback == null) fallback = c;
+                if (c.gameObject.scene.name == "Opening") return c;
+            }
+            return fallback;
+        }
+
+        // Botao "LOGOUT" fixo no canto superior direito do menu. Cores NAO-brancas +
+        // sprite NOMEADO + transicao None: a propria camada de skin ignora (nao
+        // re-skinna nem escurece). Criado uma unica vez.
+        void EnsureLogoutButton()
+        {
+            var canvas = MenuCanvas();
+            if (canvas == null) return;
+            if (canvas.transform.Find("DcgoLogoutBtn") != null) return;
+
+            var b = MakeSkinButton(canvas.transform, "DcgoLogoutBtn", "LOGOUT",
+                                   new Color(0.45f, 0.16f, 0.18f, 0.96f));
+            var rt = (RectTransform)b.transform;
+            rt.anchorMin = new Vector2(1f, 1f);
+            rt.anchorMax = new Vector2(1f, 1f);
+            rt.pivot = new Vector2(1f, 1f);
+            rt.sizeDelta = new Vector2(150f, 50f);
+            rt.anchoredPosition = new Vector2(-18f, -16f);
+            b.transform.SetAsLastSibling();
+            b.onClick.AddListener(ShowLogoutConfirm);
+        }
+
+        // Dialogo estilizado de confirmacao: overlay escuro (bloqueia clique) + painel
+        // com texto e botoes CANCELAR / SAIR. OK chama DcgoWebBridge.Logout().
+        void ShowLogoutConfirm()
+        {
+            var canvas = MenuCanvas();
+            if (canvas == null) return;
+            if (canvas.transform.Find("DcgoLogoutDialog") != null) return;
+
+            // Overlay de tela cheia (escurece o fundo e captura o clique).
+            var overlay = new GameObject("DcgoLogoutDialog", typeof(RectTransform));
+            overlay.transform.SetParent(canvas.transform, false);
+            var oimg = overlay.AddComponent<Image>();
+            oimg.sprite = _panel; oimg.type = Image.Type.Sliced;
+            oimg.color = new Color(0.01f, 0.02f, 0.05f, 0.82f);
+            oimg.raycastTarget = true;
+            var ort = (RectTransform)overlay.transform;
+            ort.anchorMin = Vector2.zero; ort.anchorMax = Vector2.one;
+            ort.offsetMin = Vector2.zero; ort.offsetMax = Vector2.zero;
+            overlay.transform.SetAsLastSibling();
+
+            // Painel central.
+            var panel = new GameObject("Panel", typeof(RectTransform));
+            panel.transform.SetParent(overlay.transform, false);
+            var pimg = panel.AddComponent<Image>();
+            pimg.sprite = _panel; pimg.type = Image.Type.Sliced;
+            pimg.color = new Color(0.08f, 0.13f, 0.22f, 1f);
+            var prt = (RectTransform)panel.transform;
+            prt.anchorMin = new Vector2(0.5f, 0.5f);
+            prt.anchorMax = new Vector2(0.5f, 0.5f);
+            prt.pivot = new Vector2(0.5f, 0.5f);
+            prt.sizeDelta = new Vector2(620f, 280f);
+            prt.anchoredPosition = Vector2.zero;
+
+            // Texto.
+            var txtGo = new GameObject("Msg", typeof(RectTransform));
+            txtGo.transform.SetParent(panel.transform, false);
+            var msg = txtGo.AddComponent<Text>();
+            msg.font = UiFont();
+            msg.text = "Sair da conta?\nVoce voltara para a tela de login.";
+            msg.color = Color.white;
+            msg.alignment = TextAnchor.MiddleCenter;
+            msg.resizeTextForBestFit = true;
+            msg.resizeTextMinSize = 10; msg.resizeTextMaxSize = 30;
+            var trt = (RectTransform)txtGo.transform;
+            trt.anchorMin = new Vector2(0f, 0.42f);
+            trt.anchorMax = new Vector2(1f, 1f);
+            trt.offsetMin = new Vector2(26f, 0f); trt.offsetMax = new Vector2(-26f, -18f);
+
+            // Botoes.
+            var cancel = MakeSkinButton(panel.transform, "Cancel", "CANCELAR",
+                                        new Color(0.20f, 0.28f, 0.40f, 1f));
+            var crt = (RectTransform)cancel.transform;
+            crt.anchorMin = new Vector2(0.06f, 0.10f); crt.anchorMax = new Vector2(0.47f, 0.34f);
+            crt.offsetMin = Vector2.zero; crt.offsetMax = Vector2.zero;
+            cancel.onClick.AddListener(() => Object.Destroy(overlay));
+
+            var ok = MakeSkinButton(panel.transform, "Ok", "SAIR",
+                                    new Color(0.55f, 0.16f, 0.18f, 1f));
+            var okrt = (RectTransform)ok.transform;
+            okrt.anchorMin = new Vector2(0.53f, 0.10f); okrt.anchorMax = new Vector2(0.94f, 0.34f);
+            okrt.offsetMin = Vector2.zero; okrt.offsetMax = Vector2.zero;
+            ok.onClick.AddListener(() => { DcgoWebBridge.Logout(); });
+        }
+
+        // Botao com fundo arredondado NOMEADO + cor fixa (nao-branca) + rotulo. A cor
+        // nao-branca e o sprite nomeado fazem a camada de skin ignora-lo.
+        Button MakeSkinButton(Transform parent, string name, string label, Color color)
+        {
+            var go = new GameObject(name, typeof(RectTransform));
+            go.transform.SetParent(parent, false);
+            var bg = go.AddComponent<Image>();
+            bg.sprite = _btn; bg.type = Image.Type.Sliced; bg.color = color;
+            var b = go.AddComponent<Button>();
+            b.targetGraphic = bg;
+            b.transition = Selectable.Transition.ColorTint;
+            var cb = b.colors;
+            cb.normalColor = Color.white;
+            cb.highlightedColor = new Color(1.25f, 1.25f, 1.25f, 1f);
+            cb.pressedColor = new Color(0.8f, 0.8f, 0.8f, 1f);
+            cb.colorMultiplier = 1f; cb.fadeDuration = 0.06f;
+            b.colors = cb;
+
+            var lgo = new GameObject("Label", typeof(RectTransform));
+            lgo.transform.SetParent(go.transform, false);
+            var t = lgo.AddComponent<Text>();
+            t.font = UiFont();
+            t.text = label; t.color = Color.white; t.alignment = TextAnchor.MiddleCenter;
+            t.resizeTextForBestFit = true; t.resizeTextMinSize = 8; t.resizeTextMaxSize = 34;
+            var lrt = (RectTransform)lgo.transform;
+            lrt.anchorMin = Vector2.zero; lrt.anchorMax = Vector2.one;
+            lrt.offsetMin = Vector2.zero; lrt.offsetMax = Vector2.zero;
+            return b;
         }
 
         // Escolhe a imagem de fundo de um botao: o targetGraphic se estiver quebrado,
