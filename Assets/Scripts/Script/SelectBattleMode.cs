@@ -220,11 +220,15 @@ public class SelectBattleMode : MonoBehaviour
                     EngMessage: "Use as\nBOT deck",
                     JpnMessage: "Botのデッキ\nに使う");
 
-                // Texto CLONADO da TitleText: garante fonte/material que renderizam no
-                // WebGL (criar Text do zero com .font nao aparecia no build).
+                // Template de texto que COMPROVADAMENTE renderiza: o rotulo do botao
+                // Select (ex.: "Use as BOT deck" aparece). Clonar a TitleText nao
+                // renderizava (fonte/material dela nao aparece neste painel no WebGL).
+                Text txtTemplate = selLabel != null ? selLabel : sbd.TitleText;
+
+                // Texto CLONADO do template: garante fonte/material que renderizam.
                 Text MakeText(Transform parent, string txt, int size, TextAnchor anchor)
                 {
-                    GameObject go = UnityEngine.Object.Instantiate(sbd.TitleText.gameObject, parent);
+                    GameObject go = UnityEngine.Object.Instantiate(txtTemplate.gameObject, parent);
                     go.name = "DcgoTxt";
                     foreach (var bb in go.GetComponents<Button>()) UnityEngine.Object.Destroy(bb);
                     var csf = go.GetComponent<ContentSizeFitter>(); if (csf) UnityEngine.Object.Destroy(csf);
