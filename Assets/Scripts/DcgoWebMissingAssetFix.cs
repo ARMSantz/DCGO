@@ -48,6 +48,7 @@ namespace DcgoWebBuild
         readonly HashSet<int> _diag    = new HashSet<int>();   // ja logados no diagnostico
         readonly HashSet<int> _rawHidden = new HashSet<int>(); // RawImages escondidas (sem textura)
         readonly Dictionary<int, Color> _battleColor = new Dictionary<int, Color>(); // cor original recolorida na partida
+        Text _labelTemplate;                                   // Text que renderiza (p/ clonar rotulos)
         bool _logged;
 
         void Start()
@@ -391,16 +392,8 @@ namespace DcgoWebBuild
             prt.anchoredPosition = Vector2.zero;
 
             // Texto.
-            var txtGo = new GameObject("Msg", typeof(RectTransform));
-            txtGo.transform.SetParent(panel.transform, false);
-            var msg = txtGo.AddComponent<Text>();
-            msg.font = UiFont();
-            msg.text = "Sair da conta?\nVoce voltara para a tela de login.";
-            msg.color = Color.white;
-            msg.alignment = TextAnchor.MiddleCenter;
-            msg.resizeTextForBestFit = true;
-            msg.resizeTextMinSize = 10; msg.resizeTextMaxSize = 30;
-            var trt = (RectTransform)txtGo.transform;
+            var msg = MakeLabel(panel.transform, "Sair da conta?\nVoce voltara para a tela de login.", 12, 28);
+            var trt = (RectTransform)msg.transform;
             trt.anchorMin = new Vector2(0f, 0.42f);
             trt.anchorMax = new Vector2(1f, 1f);
             trt.offsetMin = new Vector2(26f, 0f); trt.offsetMax = new Vector2(-26f, -18f);
@@ -439,16 +432,60 @@ namespace DcgoWebBuild
             cb.colorMultiplier = 1f; cb.fadeDuration = 0.06f;
             b.colors = cb;
 
-            var lgo = new GameObject("Label", typeof(RectTransform));
-            lgo.transform.SetParent(go.transform, false);
-            var t = lgo.AddComponent<Text>();
-            t.font = UiFont();
-            t.text = label; t.color = Color.white; t.alignment = TextAnchor.MiddleCenter;
-            t.resizeTextForBestFit = true; t.resizeTextMinSize = 8; t.resizeTextMaxSize = 34;
-            var lrt = (RectTransform)lgo.transform;
+            var t = MakeLabel(go.transform, label, 8, 32);
+            var lrt = (RectTransform)t.transform;
             lrt.anchorMin = Vector2.zero; lrt.anchorMax = Vector2.one;
-            lrt.offsetMin = Vector2.zero; lrt.offsetMax = Vector2.zero;
+            lrt.offsetMin = new Vector2(6f, 4f); lrt.offsetMax = new Vector2(-6f, -4f);
             return b;
+        }
+
+        // Text que COMPROVADAMENTE renderiza no WebGL: o rotulo de algum controle do
+        // menu (botao/InputField). Criar Text do zero NAO aparece — precisa clonar.
+        Text LabelTemplate()
+        {
+            if (_labelTemplate != null) return _labelTemplate;
+            foreach (var sel in Object.FindObjectsOfType<Selectable>())
+            {
+                if (!sel || sel.gameObject.scene.name != "Opening") continue;
+                var t = sel.GetComponentInChildren<Text>(true);
+                if (t != null && t.font != null && !string.IsNullOrEmpty(t.text)
+                    && t.name.IndexOf("Dcgo", System.StringComparison.OrdinalIgnoreCase) < 0)
+                { _labelTemplate = t; break; }
+            }
+            return _labelTemplate;
+        }
+
+        // Rotulo clonado (fonte/material que renderizam) + strip do localizador.
+        Text MakeLabel(Transform parent, string txt, int minS, int maxS)
+        {
+            var tmpl = LabelTemplate();
+            Text t;
+            if (tmpl != null)
+            {
+                var go = Object.Instantiate(tmpl.gameObject, parent);
+                go.name = "DcgoLbl";
+                foreach (var comp in go.GetComponents<Component>())
+                    if (!(comp is Text) && !(comp is RectTransform) && !(comp is CanvasRenderer))
+                        Object.Destroy(comp);
+                foreach (Transform ch in go.transform) Object.Destroy(ch.gameObject);
+                t = go.GetComponent<Text>();
+            }
+            else
+            {
+                var go = new GameObject("DcgoLbl", typeof(RectTransform));
+                go.transform.SetParent(parent, false);
+                t = go.AddComponent<Text>();
+                t.font = UiFont();
+            }
+            t.text = txt; t.color = Color.white; t.alignment = TextAnchor.MiddleCenter;
+            t.horizontalOverflow = HorizontalWrapMode.Wrap; t.verticalOverflow = VerticalWrapMode.Overflow;
+            t.resizeTextForBestFit = true; t.resizeTextMinSize = minS; t.resizeTextMaxSize = maxS;
+            t.raycastTarget = false;
+            var rt = (RectTransform)t.transform;
+            rt.localScale = Vector3.one;
+            rt.anchorMin = Vector2.zero; rt.anchorMax = Vector2.one;
+            rt.offsetMin = Vector2.zero; rt.offsetMax = Vector2.zero;
+            return t;
         }
 
         // Escolhe a imagem de fundo de um botao: o targetGraphic se estiver quebrado,
