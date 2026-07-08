@@ -432,6 +432,12 @@ namespace DcgoWebBuild
             var c = img.color;
             if (c.a < 0.55f) return false;
             if (c.r < 0.78f || c.g < 0.78f || c.b < 0.78f) return false;   // precisa ser claro
+            // ARTE (capa de deck, carta, thumbnail): a Image tem tint BRANCO mas o SPRITE
+            // e' colorido. Escurecer o tint apagaria a arte — entao ignora qualquer Image
+            // com sprite de textura razoavel. So placas de "fill" (sprite nulo/minusculo).
+            var sp = img.sprite;
+            if (sp != null && sp.texture != null && sp.rect.width >= 32f && sp.rect.height >= 32f)
+                return false;
             var s = img.rectTransform.rect.size;
             float w = Mathf.Abs(s.x), h = Mathf.Abs(s.y);
             if (w < 50f || h < 16f) return false;         // icone/checkmark: deixa
