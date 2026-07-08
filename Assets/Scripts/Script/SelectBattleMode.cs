@@ -242,17 +242,25 @@ public class SelectBattleMode : MonoBehaviour
                     return t;
                 }
 
-                // Faixa (strip) no TOPO do painel, LOGO ABAIXO do titulo e ACIMA da
-                // listagem — nao sobrepoe os decks.
+                // Faixa fixada no CANVAS RAIZ (coordenadas de TELA), na base ao centro —
+                // garante que aparece SEMPRE (ancorar ao SelectDeckObject, de rect enorme,
+                // jogava a faixa pra fora da tela). Fica abaixo da listagem de decks.
+                Canvas rootCanvas = sbd.SelectDeckObject.GetComponentInParent<Canvas>();
+                if (rootCanvas != null) rootCanvas = rootCanvas.rootCanvas;
+                Transform bannerParent = rootCanvas != null ? rootCanvas.transform
+                                                            : sbd.SelectDeckObject.transform;
+
                 bannerGO = new GameObject("BotStepBanner", typeof(RectTransform));
-                bannerGO.transform.SetParent(sbd.SelectDeckObject.transform, false);
+                bannerGO.transform.SetParent(bannerParent, false);
                 Image bannerImg = bannerGO.AddComponent<Image>();
                 bannerImg.sprite = solid;
-                bannerImg.color = new Color(0.04f, 0.09f, 0.16f, 0.98f);
+                bannerImg.color = new Color(0.05f, 0.10f, 0.18f, 0.98f);
                 RectTransform bRT = (RectTransform)bannerGO.transform;
-                bRT.anchorMin = new Vector2(0.04f, 0.72f);
-                bRT.anchorMax = new Vector2(0.96f, 0.84f);
-                bRT.offsetMin = Vector2.zero; bRT.offsetMax = Vector2.zero;
+                bRT.anchorMin = new Vector2(0.5f, 0f);
+                bRT.anchorMax = new Vector2(0.5f, 0f);
+                bRT.pivot = new Vector2(0.5f, 0f);
+                bRT.sizeDelta = new Vector2(1180f, 150f);
+                bRT.anchoredPosition = new Vector2(0f, 40f);
                 bannerGO.transform.SetAsLastSibling();
 
                 // Info (esquerda): qual e' o SEU deck ja escolhido.
