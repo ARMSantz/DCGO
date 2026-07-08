@@ -216,9 +216,22 @@ public class SelectBattleMode : MonoBehaviour
                     EngMessage: "STEP 2/2 — CHOOSE THE BOT'S DECK",
                     JpnMessage: "ステップ 2/2 — Botのデッキを選択");
 
-                if (selLabel != null) selLabel.text = LocalizeUtility.GetLocalizedString(
-                    EngMessage: "Use as\nBOT deck",
-                    JpnMessage: "Botのデッキ\nに使う");
+                if (selLabel != null)
+                {
+                    // Neutraliza o localizador do rotulo, senao ele reescreve de volta
+                    // "Select Your Deck" logo apos eu trocar o texto.
+                    foreach (var comp in selLabel.GetComponents<Component>())
+                    {
+                        var cn = comp.GetType().Name;
+                        if (!(comp is Text) &&
+                            (cn.IndexOf("Local", System.StringComparison.OrdinalIgnoreCase) >= 0
+                          || cn.IndexOf("Translat", System.StringComparison.OrdinalIgnoreCase) >= 0))
+                            UnityEngine.Object.Destroy(comp);
+                    }
+                    selLabel.text = LocalizeUtility.GetLocalizedString(
+                        EngMessage: "Use as\nBOT deck",
+                        JpnMessage: "Botのデッキ\nに使う");
+                }
 
                 // Template de texto que COMPROVADAMENTE renderiza: o rotulo do botao
                 // Select (ex.: "Use as BOT deck" aparece). Clonar a TitleText nao
@@ -230,9 +243,15 @@ public class SelectBattleMode : MonoBehaviour
                 {
                     GameObject go = UnityEngine.Object.Instantiate(txtTemplate.gameObject, parent);
                     go.name = "DcgoTxt";
-                    foreach (var bb in go.GetComponents<Button>()) UnityEngine.Object.Destroy(bb);
-                    var csf = go.GetComponent<ContentSizeFitter>(); if (csf) UnityEngine.Object.Destroy(csf);
-                    var le = go.GetComponent<LayoutElement>(); if (le) UnityEngine.Object.Destroy(le);
+                    // Remove TUDO que nao seja o proprio Text/RectTransform/CanvasRenderer:
+                    // o template tem um componente de LOCALIZACAO que reescreve o texto de
+                    // volta pra chave original (por isso aparecia "Select Your Deck").
+                    foreach (var comp in go.GetComponents<Component>())
+                    {
+                        if (comp is Text || comp is RectTransform || comp is CanvasRenderer) continue;
+                        UnityEngine.Object.Destroy(comp);
+                    }
+                    foreach (Transform child in go.transform) UnityEngine.Object.Destroy(child.gameObject);
                     Text t = go.GetComponent<Text>();
                     t.text = txt; t.fontSize = size; t.alignment = anchor; t.color = Color.white;
                     t.horizontalOverflow = HorizontalWrapMode.Wrap;
