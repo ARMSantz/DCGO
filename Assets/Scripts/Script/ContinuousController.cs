@@ -60,7 +60,9 @@ public partial class ContinuousController : MonoBehaviour
         }
     }
     public DeckData LastBattleDeckData { get; private set; } = null;
-    public DeckData AIBattleDeckData { get; set; } = null;
+
+    // Deck escolhido pelo jogador para o BOT usar (senao, aleatorio).
+    public DeckData BotDeckData = null;
 
     public bool NeedUpdate { get; set; }
 
@@ -547,11 +549,18 @@ public partial class ContinuousController : MonoBehaviour
 
         // deck data
         //DeckDatas = PlayerPrefsUtil.LoadList<DeckData>(DeckDatasPlayerPrefsKey);
+#if UNITY_WEBGL && !UNITY_EDITOR
+        StartCoroutine(LoadDecksFromCloud());
+#else
         LoadDeckLists();
+#endif
         GetComponent<StarterDeck>().SetStarterDecks();
 
         // player data
         LoadPlayerName();
+#if UNITY_WEBGL && !UNITY_EDITOR
+        PlayerName = DcgoWebBridge.Username;
+#endif
         LoadWinCount();
 
         // game play
@@ -625,6 +634,10 @@ public partial class ContinuousController : MonoBehaviour
 
     public void SaveDeckData(DeckData data)
     {
+#if UNITY_WEBGL && !UNITY_EDITOR
+        StartCoroutine(SaveDeckToCloud(data));
+        return;
+#endif
         string savePath = StreamingAssetsUtility.GetStreamingAssetPath("Decks", false);
 
         File.WriteAllText($"{savePath}/{data.DeckName}_{data.DeckID}.txt", DeckCodeUtility.GetDeckBuilderFile(data));
@@ -632,6 +645,11 @@ public partial class ContinuousController : MonoBehaviour
 
     public void RenameDeck(DeckData data, string newName)
     {
+#if UNITY_WEBGL && !UNITY_EDITOR
+        data.DeckName = newName;
+        StartCoroutine(SaveDeckToCloud(data));
+        return;
+#endif
         string savePath = StreamingAssetsUtility.GetStreamingAssetPath("Decks", false);
         if (File.Exists($"{savePath}/{data.DeckName}_{data.DeckID}.txt"))
         {
@@ -645,6 +663,10 @@ public partial class ContinuousController : MonoBehaviour
 
     public void DeleteDeck(DeckData data)
     {
+#if UNITY_WEBGL && !UNITY_EDITOR
+        StartCoroutine(DeleteDeckFromCloud(data));
+        return;
+#endif
         string filePath = StreamingAssetsUtility.GetStreamingAssetPath("Decks", false);
 
         if (!Directory.Exists(filePath))
