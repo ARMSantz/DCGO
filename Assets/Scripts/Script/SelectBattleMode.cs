@@ -220,78 +220,83 @@ public class SelectBattleMode : MonoBehaviour
                     EngMessage: "Use as\nBOT deck",
                     JpnMessage: "Botのデッキ\nに使う");
 
-                bannerGO = new GameObject("BotStepBanner");
+                // Texto CLONADO da TitleText: garante fonte/material que renderizam no
+                // WebGL (criar Text do zero com .font nao aparecia no build).
+                Text MakeText(Transform parent, string txt, int size, TextAnchor anchor)
+                {
+                    GameObject go = UnityEngine.Object.Instantiate(sbd.TitleText.gameObject, parent);
+                    go.name = "DcgoTxt";
+                    foreach (var bb in go.GetComponents<Button>()) UnityEngine.Object.Destroy(bb);
+                    var csf = go.GetComponent<ContentSizeFitter>(); if (csf) UnityEngine.Object.Destroy(csf);
+                    var le = go.GetComponent<LayoutElement>(); if (le) UnityEngine.Object.Destroy(le);
+                    Text t = go.GetComponent<Text>();
+                    t.text = txt; t.fontSize = size; t.alignment = anchor; t.color = Color.white;
+                    t.horizontalOverflow = HorizontalWrapMode.Wrap;
+                    t.verticalOverflow = VerticalWrapMode.Overflow;
+                    t.raycastTarget = false;
+                    RectTransform rt = (RectTransform)go.transform;
+                    rt.localScale = Vector3.one;
+                    rt.anchorMin = Vector2.zero; rt.anchorMax = Vector2.one;
+                    rt.offsetMin = Vector2.zero; rt.offsetMax = Vector2.zero;
+                    rt.pivot = new Vector2(0.5f, 0.5f);
+                    return t;
+                }
+
+                // Faixa (strip) no TOPO do painel, LOGO ABAIXO do titulo e ACIMA da
+                // listagem — nao sobrepoe os decks.
+                bannerGO = new GameObject("BotStepBanner", typeof(RectTransform));
                 bannerGO.transform.SetParent(sbd.SelectDeckObject.transform, false);
                 Image bannerImg = bannerGO.AddComponent<Image>();
                 bannerImg.sprite = solid;
-                bannerImg.color = new Color(0.03f, 0.08f, 0.15f, 0.97f);
-                RectTransform bRT = bannerGO.GetComponent<RectTransform>();
-                bRT.anchorMin = new Vector2(0.5f, 0f);
-                bRT.anchorMax = new Vector2(0.5f, 0f);
-                bRT.pivot = new Vector2(0.5f, 0f);
-                bRT.sizeDelta = new Vector2(1560f, 110f);
-                bRT.anchoredPosition = new Vector2(0f, 18f);
+                bannerImg.color = new Color(0.04f, 0.09f, 0.16f, 0.98f);
+                RectTransform bRT = (RectTransform)bannerGO.transform;
+                bRT.anchorMin = new Vector2(0.04f, 0.72f);
+                bRT.anchorMax = new Vector2(0.96f, 0.84f);
+                bRT.offsetMin = Vector2.zero; bRT.offsetMax = Vector2.zero;
+                bannerGO.transform.SetAsLastSibling();
 
-                GameObject infoGO = new GameObject("Info");
-                infoGO.transform.SetParent(bannerGO.transform, false);
-                Text info = infoGO.AddComponent<Text>();
-                info.font = sbd.TitleText.font;
-                info.fontSize = 26;
-                info.color = Color.white;
-                info.alignment = TextAnchor.MiddleLeft;
-                info.text = LocalizeUtility.GetLocalizedString(
-                    EngMessage: "Your deck: " + playerDeckName + "  ✔\nPick the BOT's deck and press \"Use as BOT deck\" — or start with a random one.",
-                    JpnMessage: "自分のデッキ: " + playerDeckName + " ✔\nBotのデッキを選ぶか、ランダムで開始してください。");
-                RectTransform iRT = infoGO.GetComponent<RectTransform>();
+                // Info (esquerda): qual e' o SEU deck ja escolhido.
+                GameObject infoHost = new GameObject("Info", typeof(RectTransform));
+                infoHost.transform.SetParent(bannerGO.transform, false);
+                RectTransform iRT = (RectTransform)infoHost.transform;
                 iRT.anchorMin = new Vector2(0f, 0f);
-                iRT.anchorMax = new Vector2(0.52f, 1f);
-                iRT.offsetMin = new Vector2(28f, 6f);
-                iRT.offsetMax = new Vector2(-6f, -6f);
+                iRT.anchorMax = new Vector2(0.55f, 1f);
+                iRT.offsetMin = new Vector2(22f, 4f); iRT.offsetMax = new Vector2(-6f, -4f);
+                MakeText(infoHost.transform, LocalizeUtility.GetLocalizedString(
+                    EngMessage: "NOW PICK THE BOT'S DECK\nYour deck: " + playerDeckName + "   (close = random bot)",
+                    JpnMessage: "Botのデッキを選択\n自分のデッキ: " + playerDeckName + "（閉じる=ランダム）"),
+                    22, TextAnchor.MiddleLeft);
 
-                Button MakeBannerButton(string label, float xMin, float xMax, UnityAction act)
+                Button MakeBannerButton(float xMin, float xMax, string label, UnityAction act)
                 {
-                    GameObject go = new GameObject("Btn_" + xMin);
+                    GameObject go = new GameObject("BotBtn", typeof(RectTransform));
                     go.transform.SetParent(bannerGO.transform, false);
                     Image bg = go.AddComponent<Image>();
                     bg.sprite = solid;
-                    bg.color = new Color(0.15f, 0.28f, 0.48f, 1f);
+                    bg.color = new Color(0.16f, 0.30f, 0.52f, 1f);
                     Button b = go.AddComponent<Button>();
                     b.targetGraphic = bg;
-                    RectTransform rt = go.GetComponent<RectTransform>();
-                    rt.anchorMin = new Vector2(xMin, 0f);
-                    rt.anchorMax = new Vector2(xMax, 1f);
-                    rt.offsetMin = new Vector2(8f, 14f);
-                    rt.offsetMax = new Vector2(-8f, -14f);
-                    GameObject lgo = new GameObject("Label");
-                    lgo.transform.SetParent(go.transform, false);
-                    Text lt = lgo.AddComponent<Text>();
-                    lt.font = sbd.TitleText.font;
-                    lt.fontSize = 24;
-                    lt.color = Color.white;
-                    lt.alignment = TextAnchor.MiddleCenter;
-                    lt.text = label;
-                    RectTransform lrt = lgo.GetComponent<RectTransform>();
-                    lrt.anchorMin = Vector2.zero;
-                    lrt.anchorMax = Vector2.one;
-                    lrt.offsetMin = Vector2.zero;
-                    lrt.offsetMax = Vector2.zero;
+                    var cb = b.colors;
+                    cb.highlightedColor = new Color(0.26f, 0.44f, 0.68f, 1f);
+                    cb.pressedColor = new Color(0.10f, 0.20f, 0.36f, 1f);
+                    cb.fadeDuration = 0.06f;
+                    b.colors = cb;
+                    RectTransform rt = (RectTransform)go.transform;
+                    rt.anchorMin = new Vector2(xMin, 0.14f);
+                    rt.anchorMax = new Vector2(xMax, 0.86f);
+                    rt.offsetMin = Vector2.zero; rt.offsetMax = Vector2.zero;
+                    MakeText(go.transform, label, 20, TextAnchor.MiddleCenter);
                     b.onClick.AddListener(act);
                     return b;
                 }
 
-                MakeBannerButton(LocalizeUtility.GetLocalizedString(
-                    EngMessage: "START — RANDOM BOT DECK",
-                    JpnMessage: "ランダムBotで開始"),
-                    0.53f, 0.78f, () =>
-                {
-                    ContinuousController.instance.BotDeckData = null;
-                    StartBattle();
-                });
+                MakeBannerButton(0.57f, 0.77f, LocalizeUtility.GetLocalizedString(
+                    EngMessage: "RANDOM BOT", JpnMessage: "ランダムBot"),
+                    () => { ContinuousController.instance.BotDeckData = null; StartBattle(); });
 
-                MakeBannerButton(LocalizeUtility.GetLocalizedString(
-                    EngMessage: "← CHANGE MY DECK",
-                    JpnMessage: "← 自分のデッキを変更"),
-                    0.79f, 0.99f, RestartSelection);
+                MakeBannerButton(0.78f, 0.99f, LocalizeUtility.GetLocalizedString(
+                    EngMessage: "CHANGE MY DECK", JpnMessage: "自分のデッキを変更"),
+                    RestartSelection);
 
                 // Fechar o painel na etapa 2 = cancelar e voltar a etapa 1
                 sbd.OnCloseSelectBattleDeckAction = RestartSelection;
