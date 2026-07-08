@@ -47,6 +47,7 @@ namespace DcgoWebBuild
         readonly HashSet<int> _doneImg = new HashSet<int>();   // Images de poluicao ja tratadas
         readonly HashSet<int> _diag    = new HashSet<int>();   // ja logados no diagnostico
         readonly HashSet<int> _rawHidden = new HashSet<int>(); // RawImages escondidas (sem textura)
+        readonly Dictionary<int, Color> _battleColor = new Dictionary<int, Color>(); // cor original recolorida na partida
         bool _logged;
 
         void Start()
@@ -82,7 +83,10 @@ namespace DcgoWebBuild
             // FindObjectsOfType nunca toca no campo/cartas nem por um instante. Ao fim da
             // partida ela e' descarregada e o menu volta a ser skinnado.
             var battleScene = SceneManager.GetSceneByName("BattleScene");
-            if (battleScene.IsValid() || battleScene.isLoaded) return;
+            if (battleScene.IsValid() || battleScene.isLoaded) { SkinBattle(); return; }
+
+            // Saiu da partida: limpa o rastro de recoloracao (ids ja destruidos).
+            if (_battleColor.Count > 0) _battleColor.Clear();
 
             // (a) Magenta: SO renderers com shader de ERRO (InternalError). NAO mexer em
             //     material nulo — carta/preview carregando a textura tem material nulo por
@@ -268,6 +272,49 @@ namespace DcgoWebBuild
                 _logged = true;
                 Debug.Log("[DCGOSKIN] scene=" + SceneManager.GetActiveScene().name +
                           " skinnedBtn=" + skinned + " hidden=" + hidden + " masksOff=" + masks);
+            }
+        }
+
+        // ------------------------------------------------------------- partida ----
+        //
+        // Skin CONSERVADOR da BattleScene: SO recolore caixas brancas NAO-interativas
+        // (versos de carta, zonas/pilhas, paineis de dialogo) — assets que nao vieram
+        // no fork publico e renderizam branco. Regras de ouro:
+        //   * so mexe em objetos da CENA "BattleScene";
+        //   * NUNCA toca em Image dentro de Selectable (cartas clicaveis, botoes);
+        //   * NUNCA troca sprite, esconde, desliga Renderer/ParticleSystem nem mexe em
+        //     Text — so a COR (tint), e guarda a original;
+        //   * REVERTE a cor quando a arte carrega (async) — nada fica escuro por engano.
+        // Assim a partida fica legivel sem tocar em cartas, posicoes, memoria ou logica.
+        void SkinBattle()
+        {
+            foreach (var img in Object.FindObjectsOfType<Image>(true))
+            {
+                if (!img) continue;
+                if (img.gameObject.scene.name != "BattleScene") continue;
+                if (img.GetComponent<Mask>() != null) continue;
+                if (InSelectable(img.transform)) continue;   // protege cartas/botoes
+
+                int id = img.GetInstanceID();
+                var col = img.color;
+                bool whiteish = IsBrokenArt(img)
+                    || (col.a > 0.55f && col.r > 0.78f && col.g > 0.78f && col.b > 0.78f);
+                var sz = img.rectTransform.rect.size;
+                bool bigEnough = Mathf.Abs(sz.x) >= 24f && Mathf.Abs(sz.y) >= 24f;
+
+                if (whiteish && bigEnough)
+                {
+                    if (!_battleColor.ContainsKey(id)) _battleColor[id] = col;
+                    bool panel = Mathf.Abs(sz.x) > 220f && Mathf.Abs(sz.y) > 140f;
+                    img.color = panel
+                        ? new Color(0.06f, 0.10f, 0.18f, 0.92f)    // painel/zona: azul escuro
+                        : new Color(0.12f, 0.18f, 0.30f, 1f);      // verso/placa: azul medio
+                }
+                else if (_battleColor.TryGetValue(id, out var orig))
+                {
+                    img.color = orig;               // arte carregou: devolve a cor original
+                    _battleColor.Remove(id);
+                }
             }
         }
 
