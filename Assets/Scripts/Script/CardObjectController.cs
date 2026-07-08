@@ -22,11 +22,7 @@ public class CardObjectController : MonoBehaviour
 
         if (GManager.instance.IsAI)
         {
-            if (ContinuousController.instance.AIBattleDeckData != null)
-            {
-                RandomDeck = ContinuousController.instance.AIBattleDeckData;
-            }
-            else if (ContinuousController.instance.DeckDatas.Count((deckData) => deckData.IsValidDeckData()) > 0)
+            if (ContinuousController.instance.DeckDatas.Count((deckData) => deckData.IsValidDeckData()) > 0)
             {
                 List<DeckData> deckDatas = new List<DeckData>();
 
@@ -38,7 +34,9 @@ public class CardObjectController : MonoBehaviour
                     }
                 }
 
-                DeckData randomDeck = deckDatas[UnityEngine.Random.Range(0, deckDatas.Count)];
+                DeckData randomDeck = (ContinuousController.instance.BotDeckData != null && ContinuousController.instance.BotDeckData.IsValidDeckData())
+                    ? ContinuousController.instance.BotDeckData
+                    : deckDatas[UnityEngine.Random.Range(0, deckDatas.Count)];
 
                 RandomDeck = new DeckData(randomDeck.GetThisDeckCode(), randomDeck.DeckID);
 
