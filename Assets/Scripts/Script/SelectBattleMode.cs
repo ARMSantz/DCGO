@@ -143,9 +143,10 @@ public class SelectBattleMode : MonoBehaviour
 
         else
         {
-            ContinuousController.instance.AIBattleDeckData = null;
+            // Sem escolha explicita o bot joga de deck ALEATORIO (regra original).
+            ContinuousController.instance.BotDeckData = null;
 
-            // Etapa 1 – deck do jogador (fluxo original)
+            // Etapa 1 – deck do jogador
             Opening.instance.battle.selectBattleDeck.SetUpSelectBattleDeck(() =>
             {
                 SelectBattleDeck sbd = Opening.instance.battle.selectBattleDeck;
@@ -161,9 +162,8 @@ public class SelectBattleMode : MonoBehaviour
                 Text selLabel = sbd.SelectDeckButton.GetComponentInChildren<Text>(true);
                 string selLabelOriginal = selLabel != null ? selLabel.text : null;
 
-                // Sprite proprio e NOMEADO para a UI da etapa 2 — a camada de skin
-                // (DcgoWebMenuSkin) ignora sprites com nome, entao nada aqui e'
-                // escondido ou re-skinnado por engano.
+                // Sprite proprio e NOMEADO: a camada de skin (DcgoWebMenuSkin) ignora
+                // sprites com nome, entao nada do banner e' escondido/re-skinnado.
                 Texture2D solidTex = new Texture2D(2, 2, TextureFormat.RGBA32, false);
                 solidTex.SetPixels32(new Color32[] {
                     new Color32(255,255,255,255), new Color32(255,255,255,255),
@@ -181,11 +181,13 @@ public class SelectBattleMode : MonoBehaviour
 
                 void StartBattle()
                 {
-                    // Guarda contra clique duplo: carregar a BattleScene 2x (aditiva)
-                    // duplica a UI da partida e trava os botoes do mulligan.
+                    // Trava de clique duplo: iniciar a partida 2x carrega a BattleScene
+                    // (aditiva) duplicada e mata os botoes do mulligan.
                     if (battleStarted) return;
                     battleStarted = true;
                     Cleanup();
+                    // Fecha o painel ANTES da partida — aberto, ele continua raycast
+                    // por cima da BattleScene e bloqueia o mulligan.
                     sbd.SelectDeckObject.SetActive(false);
                     sbd.Off();
                     ContinuousController.instance.StartCoroutine(StartBattleCoroutine());
@@ -195,11 +197,21 @@ public class SelectBattleMode : MonoBehaviour
                 {
                     if (battleStarted) return;
                     Cleanup();
+                    ContinuousController.instance.BotDeckData = null;
                     sbd.SelectDeckObject.SetActive(false);
                     StartSelectBattleDeck(true);
                 }
 
                 // ---------- Etapa 2 – deck do BOT ----------
+                // Reusa a mecanica do fork (reseta _once/botao) e sobrepoe o titulo.
+                sbd.SetUpBotDeckSelection(() =>
+                {
+                    DeckData botDeck = sbd.deckInfoPanel.ShowingDeckData;
+                    if (botDeck == null || !botDeck.IsValidDeckData()) return;
+                    ContinuousController.instance.BotDeckData = botDeck;
+                    StartBattle();
+                });
+
                 sbd.TitleText.text = LocalizeUtility.GetLocalizedString(
                     EngMessage: "STEP 2/2 — CHOOSE THE BOT'S DECK",
                     JpnMessage: "ステップ 2/2 — Botのデッキを選択");
@@ -236,7 +248,7 @@ public class SelectBattleMode : MonoBehaviour
                 iRT.offsetMin = new Vector2(28f, 6f);
                 iRT.offsetMax = new Vector2(-6f, -6f);
 
-                Button MakeBannerButton(string label, float xMin, float xMax, UnityEngine.Events.UnityAction act)
+                Button MakeBannerButton(string label, float xMin, float xMax, UnityAction act)
                 {
                     GameObject go = new GameObject("Btn_" + xMin);
                     go.transform.SetParent(bannerGO.transform, false);
@@ -272,7 +284,7 @@ public class SelectBattleMode : MonoBehaviour
                     JpnMessage: "ランダムBotで開始"),
                     0.53f, 0.78f, () =>
                 {
-                    ContinuousController.instance.AIBattleDeckData = null;
+                    ContinuousController.instance.BotDeckData = null;
                     StartBattle();
                 });
 
@@ -281,22 +293,8 @@ public class SelectBattleMode : MonoBehaviour
                     JpnMessage: "← 自分のデッキを変更"),
                     0.79f, 0.99f, RestartSelection);
 
-                // Confirmar: o botao "Select" do painel agora define o deck do BOT.
-                // Copia o deck (mesmo padrao do RandomDeck original) para nunca
-                // compartilhar a mesma instancia com o deck do jogador.
-                sbd.deckInfoPanel.OnClickSelectDeckAction = () =>
-                {
-                    DeckData botDeck = sbd.deckInfoPanel.ShowingDeckData;
-                    if (botDeck == null || !botDeck.IsValidDeckData()) return;
-                    ContinuousController.instance.AIBattleDeckData =
-                        new DeckData(botDeck.GetThisDeckCode(), botDeck.DeckID);
-                    StartBattle();
-                };
-
                 // Fechar o painel na etapa 2 = cancelar e voltar a etapa 1
                 sbd.OnCloseSelectBattleDeckAction = RestartSelection;
-
-                ContinuousController.instance.StartCoroutine(sbd.SetDeckList(false));
 
             }, 0);
         }
