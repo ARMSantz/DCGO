@@ -1371,6 +1371,118 @@ public partial class ContinuousController : MonoBehaviour
         Debug.Log($"random number sequence initialization, GameRandom.Seed:{random}");
     }
 
+    // ------------------------------------------------------------- rematch ----
+    //
+    // Rematch = RECARREGAR a BattleScene (unload + load aditivo), reusando a config
+    // que ja esta aqui (BattleDeckData, BotDeckData, isAI, isRandomMatch). Assim o
+    // GManager/Init roda de novo com os MESMOS decks; "quem comeca" segue a mesma
+    // regra (aleatorio no random/bot; room property no room match). NAO reseta estado
+    // a mao — reusa todo o caminho de start, que ja funciona.
+    //
+    // REGRA (room/random): so ha rematch se OS DOIS escolherem rematch. Se qualquer um
+    // escolher SAIR, nao ha rematch (aviso + OK -> segue o fluxo de saida). Cada
+    // jogador ve em tempo real o que o outro marcou (callbacks abaixo atualizam a UI).
+    public enum RematchChoice { None, Rematch, Exit }
+    public RematchChoice RematchMine { get; private set; } = RematchChoice.None;
+    public RematchChoice RematchTheirs { get; private set; } = RematchChoice.None;
+    public System.Action OnRematchUpdate;      // ResultObject: atualizar status/botoes
+    public System.Action OnRematchCancelled;   // ResultObject: mostrar aviso "sem rematch"
+    bool _rematching = false;
+    bool _rematchResolved = false;
+
+    // Chamado pelo ResultObject ao abrir o dialogo — zera o estado da rodada.
+    public void ResetRematchSession()
+    {
+        RematchMine = RematchChoice.None;
+        RematchTheirs = RematchChoice.None;
+        _rematchResolved = false;
+    }
+
+    // Clique em REMATCH.
+    public void ChooseRematch()
+    {
+        if (_rematching || _endBattle) return;
+        if (isAI) { StartRematch(); return; }              // bot: reinicia direto
+        if (RematchMine != RematchChoice.None) return;     // ja escolheu
+        RematchMine = RematchChoice.Rematch;
+        BroadcastChoice(RematchChoice.Rematch);
+        EvaluateRematch();
+    }
+
+    // Clique em SAIR / TROCAR DECK.
+    public void ChooseExit()
+    {
+        if (_rematching) return;
+        if (isAI) { EndBattle(); return; }                 // bot: volta ao menu
+        if (RematchMine != RematchChoice.None) return;
+        RematchMine = RematchChoice.Exit;
+        BroadcastChoice(RematchChoice.Exit);
+        EvaluateRematch();
+    }
+
+    void BroadcastChoice(RematchChoice c)
+    {
+        var pv = GetComponent<PhotonView>();
+        if (pv != null && PhotonNetwork.IsConnected)
+            pv.RPC(nameof(RematchChoiceRpc), RpcTarget.Others, (int)c);
+    }
+
+    [PunRPC]
+    public void RematchChoiceRpc(int choice)
+    {
+        RematchTheirs = (RematchChoice)choice;
+        EvaluateRematch();
+    }
+
+    void EvaluateRematch()
+    {
+        OnRematchUpdate?.Invoke();     // reflete as escolhas na UI (tempo real)
+        if (_rematchResolved) return;
+
+        // Qualquer SAIR -> sem rematch (aviso + OK segue o fluxo).
+        if (RematchMine == RematchChoice.Exit || RematchTheirs == RematchChoice.Exit)
+        {
+            _rematchResolved = true;
+            OnRematchCancelled?.Invoke();
+            return;
+        }
+        // Os DOIS rematch -> reinicia ja.
+        if (RematchMine == RematchChoice.Rematch && RematchTheirs == RematchChoice.Rematch)
+        {
+            _rematchResolved = true;
+            StartRematch();
+        }
+        // senao: aguardando a escolha do outro.
+    }
+
+    // OK no aviso "sem rematch" -> segue o fluxo de saida (room->sala, random->menu).
+    public void ConfirmNoRematch()
+    {
+        EndBattle();
+    }
+
+    void StartRematch()
+    {
+        if (_rematching) return;
+        _rematching = true;
+        StartCoroutine(RematchCoroutine());
+    }
+
+    IEnumerator RematchCoroutine()
+    {
+        var unload = SceneManager.UnloadSceneAsync("BattleScene");
+        yield return unload;
+
+        yield return Resources.UnloadUnusedAssets();
+
+        yield return _waitForSeconds0_1;
+
+        SceneManager.LoadSceneAsync("BattleScene", LoadSceneMode.Additive);
+
+        _rematching = false;
+        ResetRematchSession();
+    }
+
 #if UNITY_EDITOR
     #region Photon Debug HUD
     bool _showPhotonDebug = false;
