@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.UI;
 using UnityEngine.SceneManagement;
+using TMPro;
 
 namespace DcgoWebBuild
 {
@@ -48,7 +49,7 @@ namespace DcgoWebBuild
         readonly HashSet<int> _diag    = new HashSet<int>();   // ja logados no diagnostico
         readonly HashSet<int> _rawHidden = new HashSet<int>(); // RawImages escondidas (sem textura)
         readonly Dictionary<int, Color> _battleColor = new Dictionary<int, Color>(); // cor original recolorida na partida
-        Text _labelTemplate;                                   // Text que renderiza (p/ clonar rotulos)
+        TMP_Text _tmpTemplate;                                 // TMP que renderiza (p/ clonar rotulos)
         bool _logged;
 
         void Start()
@@ -439,53 +440,57 @@ namespace DcgoWebBuild
             return b;
         }
 
-        // Text que COMPROVADAMENTE renderiza no WebGL: o rotulo de algum controle do
-        // menu (botao/InputField). Criar Text do zero NAO aparece — precisa clonar.
-        Text LabelTemplate()
+        // TMP que COMPROVADAMENTE renderiza no WebGL. O jogo usa TextMeshPro nos menus;
+        // criar Text/TMP do zero nao aparece — precisa CLONAR um TMP existente (herda o
+        // asset de fonte SDF ja empacotado).
+        TMP_Text TmpTemplate()
         {
-            if (_labelTemplate != null) return _labelTemplate;
-            foreach (var sel in Object.FindObjectsOfType<Selectable>())
+            if (_tmpTemplate != null) return _tmpTemplate;
+            foreach (var t in Object.FindObjectsOfType<TextMeshProUGUI>())
             {
-                if (!sel || sel.gameObject.scene.name != "Opening") continue;
-                var t = sel.GetComponentInChildren<Text>(true);
-                if (t != null && t.font != null && !string.IsNullOrEmpty(t.text)
-                    && t.name.IndexOf("Dcgo", System.StringComparison.OrdinalIgnoreCase) < 0)
-                { _labelTemplate = t; break; }
+                if (t == null || t.font == null) continue;
+                if (t.name.IndexOf("Dcgo", System.StringComparison.OrdinalIgnoreCase) >= 0) continue;
+                _tmpTemplate = t; break;
             }
-            return _labelTemplate;
+            return _tmpTemplate;
         }
 
-        // Rotulo clonado (fonte/material que renderizam) + strip do localizador.
-        Text MakeLabel(Transform parent, string txt, int minS, int maxS)
+        // Rotulo clonado de um TMP (renderiza) + strip de localizador/layout.
+        Graphic MakeLabel(Transform parent, string txt, float minS, float maxS)
         {
-            var tmpl = LabelTemplate();
-            Text t;
+            var tmpl = TmpTemplate();
             if (tmpl != null)
             {
                 var go = Object.Instantiate(tmpl.gameObject, parent);
                 go.name = "DcgoLbl";
                 foreach (var comp in go.GetComponents<Component>())
-                    if (!(comp is Text) && !(comp is RectTransform) && !(comp is CanvasRenderer))
+                    if (!(comp is TMP_Text) && !(comp is RectTransform) && !(comp is CanvasRenderer))
                         Object.Destroy(comp);
                 foreach (Transform ch in go.transform) Object.Destroy(ch.gameObject);
-                t = go.GetComponent<Text>();
+                var t = go.GetComponent<TMP_Text>();
+                t.text = txt; t.color = Color.white; t.alignment = TextAlignmentOptions.Center;
+                t.enableWordWrapping = true; t.richText = false;
+                t.enableAutoSizing = true; t.fontSizeMin = minS; t.fontSizeMax = maxS;
+                t.raycastTarget = false;
+                var rt = (RectTransform)t.transform;
+                rt.localScale = Vector3.one;
+                rt.anchorMin = Vector2.zero; rt.anchorMax = Vector2.one;
+                rt.offsetMin = Vector2.zero; rt.offsetMax = Vector2.zero;
+                return t;
             }
-            else
-            {
-                var go = new GameObject("DcgoLbl", typeof(RectTransform));
-                go.transform.SetParent(parent, false);
-                t = go.AddComponent<Text>();
-                t.font = UiFont();
-            }
-            t.text = txt; t.color = Color.white; t.alignment = TextAnchor.MiddleCenter;
-            t.horizontalOverflow = HorizontalWrapMode.Wrap; t.verticalOverflow = VerticalWrapMode.Overflow;
-            t.resizeTextForBestFit = true; t.resizeTextMinSize = minS; t.resizeTextMaxSize = maxS;
-            t.raycastTarget = false;
-            var rt = (RectTransform)t.transform;
-            rt.localScale = Vector3.one;
-            rt.anchorMin = Vector2.zero; rt.anchorMax = Vector2.one;
-            rt.offsetMin = Vector2.zero; rt.offsetMax = Vector2.zero;
-            return t;
+
+            // Fallback (legado) caso nao ache TMP — melhor que nada.
+            var lgo = new GameObject("DcgoLbl", typeof(RectTransform));
+            lgo.transform.SetParent(parent, false);
+            var lt = lgo.AddComponent<Text>();
+            lt.font = UiFont();
+            lt.text = txt; lt.color = Color.white; lt.alignment = TextAnchor.MiddleCenter;
+            lt.resizeTextForBestFit = true; lt.resizeTextMinSize = (int)minS; lt.resizeTextMaxSize = (int)maxS;
+            lt.raycastTarget = false;
+            var lrt = (RectTransform)lt.transform;
+            lrt.anchorMin = Vector2.zero; lrt.anchorMax = Vector2.one;
+            lrt.offsetMin = Vector2.zero; lrt.offsetMax = Vector2.zero;
+            return lt;
         }
 
         // Escolhe a imagem de fundo de um botao: o targetGraphic se estiver quebrado,
