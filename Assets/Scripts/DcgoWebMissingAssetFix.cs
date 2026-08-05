@@ -293,6 +293,66 @@ namespace DcgoWebBuild
         // Assim a partida fica legivel sem tocar em cartas, posicoes, memoria ou logica.
         void SkinBattle()
         {
+            // (0) EFEITOS DE UI (UIEffect/Glow/Shiny/Glitch): na GPU real o shader
+            //     "funciona" mas sai ESCURO (a ParameterTexture do UIEffect nao inicia
+            //     direito no WebGL) — as cartas ficam com um veu preto por cima
+            //     (no SwiftShader o shader falha e ja era removido; na GPU nao).
+            //     Sao efeitos decorativos: voltar ao material padrao = arte limpa.
+            //     So MATERIAL — cor/sprite/logica intactos, por isso pode rodar em
+            //     cartas e botoes tambem.
+            // Os efeitos sao IMaterialModifier: trocar so o material nao resolve
+            // (o componente reaplica). Desabilita o COMPONENTE modificador — nunca
+            // um Graphic (nada some), so o efeito para de escurecer.
+            foreach (var mb in Object.FindObjectsOfType<MonoBehaviour>(true))
+            {
+                if (!mb || !mb.enabled) continue;
+                if (mb.gameObject.scene.name != "BattleScene") continue;
+                if (mb is Graphic) continue;                 // nunca esconder arte
+                var tn = mb.GetType().Name;
+                if (tn == "UIEffect" || tn == "UIShiny" || tn == "UIDissolve"
+                    || tn == "UITransitionEffect" || tn == "UIHsvModifier"
+                    || tn == "UIShadow" || tn == "UIGradient"
+                    || tn == "ShinyEffectForUGUI" || tn == "UIEffectCapturedImage")
+                {
+                    mb.enabled = false;
+                    var g2 = mb.GetComponent<Graphic>();
+                    if (g2 != null) { g2.material = null; g2.SetMaterialDirty(); }
+                }
+            }
+
+            // (0b) BOTOES-GUIA da partida que vem SEM arte (caixa branca ilegivel):
+            //      "Next Phase"/"End Breeding" e os botoes de opcao/log do canto.
+            //      Ganham o mesmo visual navy dos menus. Allowlist de NOMES — nunca
+            //      generico, pra jamais encostar numa carta.
+            foreach (var sel in Object.FindObjectsOfType<Selectable>(true))
+            {
+                if (!sel || sel.gameObject.scene.name != "BattleScene") continue;
+                var n = sel.name;
+                bool guide = n == "Next Phase"
+                          || n.IndexOf("OptionButton") >= 0
+                          || n.IndexOf("LogButton") >= 0;
+                if (!guide) continue;
+                if (!_seenSel.Add(sel.GetInstanceID())) continue;
+                var bg = sel.targetGraphic as Image;
+                if (bg == null) bg = sel.GetComponentInChildren<Image>(true);
+                if (bg == null || !IsBrokenArt(bg)) continue;
+                SkinButton(sel, bg);
+            }
+
+            // (0c) Veu do guia ("HideCannotSelectObject > Mask > background"): mesmo
+            //      alfa do desktop (0.47) fica pesado com a arte simplificada da web.
+            //      Suaviza um pouco — o destaque continua, o campo segue legivel.
+            foreach (var img in Object.FindObjectsOfType<Image>(true))
+            {
+                if (!img || img.gameObject.scene.name != "BattleScene") continue;
+                if (img.name != "background") continue;
+                var p = img.transform.parent;
+                if (p == null || p.name != "Mask") continue;
+                var pp = p.parent;
+                if (pp == null || pp.name != "HideCannotSelectObject") continue;
+                if (img.color.a > 0.33f) img.color = new Color(0f, 0f, 0f, 0.30f);
+            }
+
             foreach (var img in Object.FindObjectsOfType<Image>(true))
             {
                 if (!img) continue;
