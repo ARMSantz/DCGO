@@ -335,8 +335,20 @@ namespace DcgoWebBuild
                 if (!_seenSel.Add(sel.GetInstanceID())) continue;
                 var bg = sel.targetGraphic as Image;
                 if (bg == null) bg = sel.GetComponentInChildren<Image>(true);
-                if (bg == null || !IsBrokenArt(bg)) continue;
+                // Sempre re-skinna (mesmo com sprite valido): a arte que sobrou aqui
+                // e' um retangulo BRANCO (Btn01White) com rotulo branco — ilegivel.
+                if (bg == null) continue;
                 SkinButton(sel, bg);
+            }
+
+            // (0d) Mascara com grafico BRANCO quebrado (painel do canto sup-esq):
+            //      igual aos menus — desliga so o desenho, recorte continua.
+            foreach (var img in Object.FindObjectsOfType<Image>(true))
+            {
+                if (!img || img.gameObject.scene.name != "BattleScene") continue;
+                var mk = img.GetComponent<Mask>();
+                if (mk != null && mk.showMaskGraphic && IsBrokenArt(img))
+                    mk.showMaskGraphic = false;
             }
 
             // (0c) Veu do guia ("HideCannotSelectObject > Mask > background"): mesmo
