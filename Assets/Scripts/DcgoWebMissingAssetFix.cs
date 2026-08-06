@@ -374,8 +374,14 @@ namespace DcgoWebBuild
 
                 int id = img.GetInstanceID();
                 var col = img.color;
-                bool whiteish = IsBrokenArt(img)
-                    || (col.a > 0.55f && col.r > 0.78f && col.g > 0.78f && col.b > 0.78f);
+                // ATENCAO: na partida NAO usar IsBrokenArt (checa NOME do sprite) —
+                // as CARTAS usam sprites criados em runtime (Sprite.Create) que vem
+                // SEM nome mas com textura real → seriam pintadas de escuro (e o
+                // "reverte" fazia oscilar claro/escuro a cada tick). Arte com
+                // textura de verdade e' valida; so' e' "quebrado" sprite nulo/vazio.
+                bool whiteish = BattleBrokenArt(img)
+                    || (img.sprite == null
+                        && col.a > 0.55f && col.r > 0.78f && col.g > 0.78f && col.b > 0.78f);
                 var sz = img.rectTransform.rect.size;
                 bool bigEnough = Mathf.Abs(sz.x) >= 24f && Mathf.Abs(sz.y) >= 24f;
 
@@ -742,6 +748,16 @@ namespace DcgoWebBuild
             // ate a proxima reconstrucao da lista.
             if (w > 900f || h > 70f) return false;
             return true;
+        }
+
+        // Versao da PARTIDA: sprite com textura real e' arte valida mesmo sem nome
+        // (cartas usam Sprite.Create em runtime). "Quebrado" = nulo ou textura vazia.
+        static bool BattleBrokenArt(Image img)
+        {
+            var s = img.sprite;
+            if (s == null || s.texture == null) return true;
+            if (s.texture.width <= 8 && s.texture.height <= 8) return true;
+            return false;
         }
 
         static bool IsBrokenArt(Image img)
